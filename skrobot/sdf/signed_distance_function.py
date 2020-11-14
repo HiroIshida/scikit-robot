@@ -11,33 +11,33 @@ class SignedDistanceFunction(SimilarityTransformCoordinates):
     def __init__(self, origin, scale, *args, **kwargs):
         super(SignedDistanceFunction, self).__init__(*args, **kwargs)
 
-        self.sdf_to_grid_transform = SimilarityTransformCoordinates(
+        self.sdf_to_obj_transform = SimilarityTransformCoordinates(
             pos=origin,
             scale=scale)
         self._origin = np.array(origin)
 
-    def __call__(self, x_sdf):
+    def __call__(self, points_obj):
         """ compute signed distance
         Parameters
         -------
-        x_sdf : 2d numpy.ndarray (n_point x 3)
+        points_obj : 2d numpy.ndarray (n_point x 3)
             input points w.r.t sdf coordinate system
         Returns
         ------
         singed distances : 1d numpy.ndarray (n_point)
         """
-        grid_coords = self.transform_pt_obj_to_grid(x_sdf.T)
-        sd = self._signed_distance(grid_coords)
+        points_sdf = self.transform_pts_obj_to_sdf(points_obj.T)
+        sd = self._signed_distance(points_sdf)
         return sd
 
     def surface_points(self, **kwargs):
         points_, dists = self._surface_points(**kwargs)
-        points = self.transform_pt_grid_to_obj(points_.T)
+        points = self.transform_pts_sdf_to_obj(points_.T)
         return points.T, dists
 
     @property
     def origin(self):
-        """Return the location of the origin in the GridSDF grid.
+        """Return the location of the origin w.r.t grid basis.
 
         Returns
         -------
@@ -59,64 +59,64 @@ class SignedDistanceFunction(SimilarityTransformCoordinates):
         return self._surface_threshold
 
 
-    def transform_pt_obj_to_grid(self, x_sdf, direction=False):
-        """Converts a point in sdf coords to the grid basis.
+    def transform_pts_obj_to_sdf(self, points_obj, direction=False):
+        """Converts a point w.r.t. sdf basis to the grid basis.
 
         If direction is True, don't translate.
 
         Parameters
         ----------
-        x_sdf : numpy 3xN ndarray or numeric scalar
+        points_obj : numpy 3xN ndarray or numeric scalar
             points to transform from sdf basis in meters to grid basis
 
         Returns
         -------
-        x_grid : numpy 3xN ndarray or scalar
+        points_sdf : numpy 3xN ndarray or scalar
             points in grid basis
         """
-        if isinstance(x_sdf, Number):
+        if isinstance(points_obj, Number):
             return self.copy_worldcoords().transform(
-                self.sdf_to_grid_transform
-            ).inverse_transformation().scale * x_sdf
+                self.sdf_to_obj_transform
+            ).inverse_transformation().scale * points_obj
         if direction is True:
             # 1 / s [R^T v - R^Tp] p == 0 case
-            x_grid = np.dot(x_sdf, self.copy_worldcoords().transform(
-                self.sdf_to_grid_transform).worldrot().T)
+            points_sdf = np.dot(points_obj, self.copy_worldcoords().transform(
+                self.sdf_to_obj_transform).worldrot().T)
         else:
-            x_grid = self.copy_worldcoords().transform(
-                self.sdf_to_grid_transform).inverse_transform_vector(x_sdf.T)
-        return x_grid
+            points_sdf = self.copy_worldcoords().transform(
+                self.sdf_to_obj_transform).inverse_transform_vector(points_obj.T)
+        return points_sdf
 
-    def transform_pt_grid_to_obj(self, x_grid, direction=False):
-        """Converts a point in grid coords to the obj basis.
+    def transform_pts_sdf_to_obj(self, points_sdf, direction=False):
+        """Converts a point w.r.t. grid basis to the obj basis.
 
         If direction is True, then don't translate.
 
         Parameters
         ----------
-        x_grid : numpy.ndarray or numbers.Number
+        points_sdf : numpy.ndarray or numbers.Number
             3xN ndarray or numeric scalar
             points to transform from grid basis to sdf basis in meters
         direction : bool
-            If this value is True, x_grid treated as normal vectors.
+            If this value is True, points_sdf treated as normal vectors.
 
         Returns
         -------
-        x_sdf : numpy.ndarray
+        points_obj : numpy.ndarray
             3xN ndarray. points in sdf basis (meters)
         """
-        if isinstance(x_grid, Number):
+        if isinstance(points_sdf, Number):
             return self.copy_worldcoords().transform(
-                self.sdf_to_grid_transform).scale * x_grid
+                self.sdf_to_obj_transform).scale * points_sdf
 
         if direction:
-            x_sdf = np.dot(x_grid, self.copy_worldcoords().transform(
-                self.sdf_to_grid_transform).worldrot().T)
+            points_obj = np.dot(points_sdf, self.copy_worldcoords().transform(
+                self.sdf_to_obj_transform).worldrot().T)
         else:
-            x_sdf = self.copy_worldcoords().transform(
-                self.sdf_to_grid_transform).transform_vector(
-                    x_grid.astype(np.float32).T)
-        return x_sdf
+            points_obj = self.copy_worldcoords().transform(
+                self.sdf_to_obj_transform).transform_vector(
+                    points_sdf.astype(np.float32).T)
+        return points_obj
 
 class BoxSDF(SignedDistanceFunction):
 
@@ -127,17 +127,17 @@ class BoxSDF(SignedDistanceFunction):
         self._width = np.array(width)
         self._surface_threshold = np.min(self._width) * 1e-2
 
-    def _signed_distance(self, box_coords):
+    def _signed_distance(self, points_sdf):
         """ compute signed distance
         Parameters
         -------
-        box_coords : 2d numpy.ndarray (n_point x 3)
+        points_sdf : 2d numpy.ndarray (n_point x 3)
             input points w.r.t box coordinates
         Returns
         ------
         singed distances : 1d numpy.ndarray (n_point)
         """
-        n_pts, dim = box_coords.shape
+        n_pts, dim = points_sdf.shape
         assert dim == 3, "dim must be 3"
 
         b = self._width * 0.5
@@ -145,7 +145,7 @@ class BoxSDF(SignedDistanceFunction):
 
         center = np.array(c).reshape(1, dim)
         center_copied = np.repeat(center, n_pts, axis=0)
-        P = box_coords - center_copied
+        P = points_sdf - center_copied
         Q = np.abs(P) - np.repeat(np.array(b).reshape(1, dim), n_pts, axis=0)
         left__ = np.array([Q, np.zeros((n_pts, dim))])
         left_ = np.max(left__, axis=0)
@@ -181,12 +181,12 @@ class GridSDF(SignedDistanceFunction):
                  *args, **kwargs):
         super(GridSDF, self).__init__(origin, resolution, *args, **kwargs)
         self.num_interpolants = 8
-        self.min_coords_x = [0, 2, 3, 5]
-        self.max_coords_x = [1, 4, 6, 7]
-        self.min_coords_y = [0, 1, 3, 6]
-        self.max_coords_y = [2, 4, 5, 7]
-        self.min_coords_z = [0, 1, 2, 4]
-        self.max_coords_z = [3, 5, 6, 7]
+        self.min_point_x = [0, 2, 3, 5]
+        self.max_point_x = [1, 4, 6, 7]
+        self.min_point_y = [0, 1, 3, 6]
+        self.max_point_y = [2, 4, 5, 7]
+        self.min_point_z = [0, 1, 2, 4]
+        self.max_point_z = [3, 5, 6, 7]
 
         self._data = sdf_data
         self._dims = self.data.shape
@@ -195,7 +195,7 @@ class GridSDF(SignedDistanceFunction):
         spts, _ = self.surface_points()
         self._center = 0.5 * (np.min(spts, axis=0) + np.max(spts, axis=0))
 
-        self.sdf_to_grid_transform = SimilarityTransformCoordinates(
+        self.sdf_to_obj_transform = SimilarityTransformCoordinates(
             pos=self.origin,
             scale=self.resolution)
 
@@ -257,12 +257,12 @@ class GridSDF(SignedDistanceFunction):
         """
         return self._center
 
-    def on_surface(self, coords):
+    def on_surface(self, points_sdf):
         """Determines whether or not a point is on the object surface.
 
         Parameters
         ----------
-        coords : :obj:`numpy.ndarray` of int
+        points_sdf : :obj:`numpy.ndarray` of int
             A 2- or 3-dimensional ndarray that indicates the desired
             coordinates in the grid.
 
@@ -272,33 +272,33 @@ class GridSDF(SignedDistanceFunction):
             Is the point on the object's surface, and what
             is the signed distance at that point?
         """
-        sdf_val = self[coords]
+        sdf_val = self[points_sdf]
         if np.abs(sdf_val) < self.surface_threshold:
             return True, sdf_val
         return False, sdf_val
 
-    def is_out_of_bounds(self, grid_coords):
-        """Returns True if coords is an out of bounds access.
+    def is_out_of_bounds(self, points_sdf):
+        """Returns True if points is an out of bounds access.
 
         Parameters
         ----------
-        grid_coords : numpy.ndarray or list of int
+        points_sdf : numpy.ndarray or list of int
             3-dimensional ndarray that indicates the desired
             coordinates in the grid.
 
         Returns
         -------
         is_out : bool
-            If coords is in grid, return True.
+            If points is in grid, return True.
         """
-        coords = np.array(grid_coords)
-        if coords.ndim == 1:
-            return np.array(coords < 0).any() or \
-                np.array(coords >= self.dimensions).any()
-        elif coords.ndim == 2:
+        points = np.array(points_sdf)
+        if points.ndim == 1:
+            return np.array(points < 0).any() or \
+                np.array(points >= self.dimensions).any()
+        elif points.ndim == 2:
             return np.logical_or(
-                (coords < 0).any(axis=1),
-                (coords >= np.array(self.dimensions)).any(axis=1))
+                (points < 0).any(axis=1),
+                (points >= np.array(self.dimensions)).any(axis=1))
         else:
             raise ValueError
 
@@ -313,52 +313,52 @@ class GridSDF(SignedDistanceFunction):
         """
         return self._data
 
-    def _signed_distance(self, grid_coords):
+    def _signed_distance(self, points_sdf):
         """Returns the signed distance at the given coordinates
 
         Interpolating if necessary.
 
         Parameters
         ----------
-        grid_coords : numpy.ndarray
+        points_sdf : numpy.ndarray
             A 3-dimensional ndarray that indicates the desired
             coordinates in the grid.
 
         Returns
         -------
         float or numpy.ndarray
-            The signed distance at the given coords (interpolated).
+            The signed distance at the given points (interpolated).
         """
-        grid_coords = np.array(grid_coords)
-        if grid_coords.ndim == 1:
-            if len(grid_coords) != 3:
+        points_sdf = np.array(points_sdf)
+        if points_sdf.ndim == 1:
+            if len(points_sdf) != 3:
                 raise IndexError('Indexing must be 3 dimensional')
-            if self.is_out_of_bounds(grid_coords):
+            if self.is_out_of_bounds(points_sdf):
                 # logging.debug('Out of bounds access. Snapping to GridSDF dims')
                 pass
 
             # snap to grid dims
-            coords_buf = np.zeros(3)
-            coords_buf[0] = max(0, min(grid_coords[0], self.dimensions[0] - 1))
-            coords_buf[1] = max(0, min(grid_coords[1], self.dimensions[1] - 1))
-            coords_buf[2] = max(0, min(grid_coords[2], self.dimensions[2] - 1))
+            point_buf = np.zeros(3)
+            point_buf[0] = max(0, min(points_sdf[0], self.dimensions[0] - 1))
+            point_buf[1] = max(0, min(points_sdf[1], self.dimensions[1] - 1))
+            point_buf[2] = max(0, min(points_sdf[2], self.dimensions[2] - 1))
 
             # regular indexing if integers
-            if type(grid_coords[0]) is int and \
-                    type(grid_coords[1]) is int and \
-                    type(grid_coords[2]) is int:
-                coords_buf = coords_buf.astype(np.int)
-                return self.data[coords_buf[0], coords_buf[1], coords_buf[2]]
+            if type(points_sdf[0]) is int and \
+                    type(points_sdf[1]) is int and \
+                    type(points_sdf[2]) is int:
+                point_buf = point_buf.astype(np.int)
+                return self.data[point_buf[0], point_buf[1], point_buf[2]]
 
             # otherwise interpolate
-            min_coords = np.floor(coords_buf)
-            max_coords = min_coords + 1  # assumed to be on grid
-            self._points_buf[self.min_coords_x, 0] = min_coords[0]
-            self._points_buf[self.max_coords_x, 0] = max_coords[0]
-            self._points_buf[self.min_coords_y, 1] = min_coords[1]
-            self._points_buf[self.max_coords_y, 1] = max_coords[1]
-            self._points_buf[self.min_coords_z, 2] = min_coords[2]
-            self._points_buf[self.max_coords_z, 2] = max_coords[2]
+            min_point = np.floor(point_buf)
+            max_point = min_point + 1  # assumed to be on grid
+            self._points_buf[self.min_point_x, 0] = min_point[0]
+            self._points_buf[self.max_point_x, 0] = max_point[0]
+            self._points_buf[self.min_point_y, 1] = min_point[1]
+            self._points_buf[self.max_point_y, 1] = max_point[1]
+            self._points_buf[self.min_point_z, 2] = min_point[2]
+            self._points_buf[self.max_point_z, 2] = max_point[2]
 
             # bilinearly interpolate points
             sd = 0.0
@@ -368,47 +368,47 @@ class GridSDF(SignedDistanceFunction):
                     v = 0.0
                 else:
                     v = self.data[p[0], p[1], p[2]]
-                w = np.prod(-np.abs(p - coords_buf) + 1)
+                w = np.prod(-np.abs(p - point_buf) + 1)
                 sd = sd + w * v
 
             return sd
-        elif grid_coords.ndim == 2:
+        elif points_sdf.ndim == 2:
             # for batch input
-            coords_buf = np.maximum(
-                0, np.minimum(grid_coords, np.array(self.dimensions) - 1))
-            sd = np.zeros(len(grid_coords), dtype=np.float64)
+            point_buf = np.maximum(
+                0, np.minimum(points_sdf, np.array(self.dimensions) - 1))
+            sd = np.zeros(len(points_sdf), dtype=np.float64)
             no_interpolating = (
-                coords_buf == np.array(coords_buf, dtype=np.int32)).all(axis=1)
-            no_interpolating_coords = np.array(
-                coords_buf[no_interpolating], dtype=np.int32)
-            if len(no_interpolating_coords) > 0:
+                point_buf == np.array(point_buf, dtype=np.int32)).all(axis=1)
+            no_interpolating_point = np.array(
+                point_buf[no_interpolating], dtype=np.int32)
+            if len(no_interpolating_point) > 0:
                 sd[no_interpolating] = self.data[
-                    no_interpolating_coords[:, 0],
-                    no_interpolating_coords[:, 1],
-                    no_interpolating_coords[:, 2],
+                    no_interpolating_point[:, 0],
+                    no_interpolating_point[:, 1],
+                    no_interpolating_point[:, 2],
                 ]
 
-            interpolating_coords = coords_buf[np.logical_not(no_interpolating)]
-            if len(interpolating_coords) == 0:
+            interpolating_point = point_buf[np.logical_not(no_interpolating)]
+            if len(interpolating_point) == 0:
                 return sd
 
-            min_coords = np.floor(interpolating_coords)
-            max_coords = min_coords + 1  # assumed to be on grid
+            min_point = np.floor(interpolating_point)
+            max_point = min_point + 1  # assumed to be on grid
 
-            n = len(interpolating_coords)
+            n = len(interpolating_point)
             points_buf = np.zeros([n, self.num_interpolants, 3], dtype=np.int)
-            points_buf[:, self.min_coords_x, 0] = np.repeat(
-                min_coords[:, 0][None, ], 4, axis=0).T
-            points_buf[:, self.max_coords_x, 0] = np.repeat(
-                max_coords[:, 0][None, ], 4, axis=0).T
-            points_buf[:, self.min_coords_y, 1] = np.repeat(
-                min_coords[:, 1][None, ], 4, axis=0).T
-            points_buf[:, self.max_coords_y, 1] = np.repeat(
-                max_coords[:, 1][None, ], 4, axis=0).T
-            points_buf[:, self.min_coords_z, 2] = np.repeat(
-                min_coords[:, 2][None, ], 4, axis=0).T
-            points_buf[:, self.max_coords_z, 2] = np.repeat(
-                max_coords[:, 2][None, ], 4, axis=0).T
+            points_buf[:, self.min_point_x, 0] = np.repeat(
+                min_point[:, 0][None, ], 4, axis=0).T
+            points_buf[:, self.max_point_x, 0] = np.repeat(
+                max_point[:, 0][None, ], 4, axis=0).T
+            points_buf[:, self.min_point_y, 1] = np.repeat(
+                min_point[:, 1][None, ], 4, axis=0).T
+            points_buf[:, self.max_point_y, 1] = np.repeat(
+                max_point[:, 1][None, ], 4, axis=0).T
+            points_buf[:, self.min_point_z, 2] = np.repeat(
+                min_point[:, 2][None, ], 4, axis=0).T
+            points_buf[:, self.max_point_z, 2] = np.repeat(
+                max_point[:, 2][None, ], 4, axis=0).T
 
             # bilinearly interpolate points
             interpolating_sd = sd[np.logical_not(no_interpolating)]
@@ -417,7 +417,7 @@ class GridSDF(SignedDistanceFunction):
                 valid = np.logical_not(self.is_out_of_bounds(p))
                 p = p[valid]
                 v = self.data[p[:, 0], p[:, 1], p[:, 2]]
-                w = np.prod(-np.abs(p - interpolating_coords[valid]) + 1,
+                w = np.prod(-np.abs(p - interpolating_point[valid]) + 1,
                             axis=1)
                 interpolating_sd[valid] = interpolating_sd[valid] + w * v
             sd[np.logical_not(no_interpolating)] = interpolating_sd
@@ -425,23 +425,23 @@ class GridSDF(SignedDistanceFunction):
         else:
             raise ValueError
 
-    def __getitem__(self, grid_coords):
+    def __getitem__(self, points_sdf):
         """Returns the signed distance at the given coordinates.
 
         Parameters
         ----------
-        grid_coords : numpy.ndarray
+        points_sdf : numpy.ndarray
             A or 3-dimensional ndarray that indicates the desired
             coordinates in the grid.
 
         Returns
         -------
         sd : float
-            The signed distance at the given grid_coords (interpolated).
+            The signed distance at the given points_sdf (interpolated).
         """
-        return self._signed_distance(grid_coords)
+        return self._signed_distance(points_sdf)
 
-    def surface_normal(self, grid_coords, delta=1.5):
+    def surface_normal(self, points_sdf, delta=1.5):
         """Returns the sdf surface normal at the given coordinates
 
         Returns the sdf surface normal at the given coordinates by
@@ -449,7 +449,7 @@ class GridSDF(SignedDistanceFunction):
 
         Parameters
         ----------
-        grid_coords : numpy.ndarray
+        points_sdf : numpy.ndarray
             A 3-dimensional ndarray that indicates the desired
             coordinates in the grid.
 
@@ -465,29 +465,29 @@ class GridSDF(SignedDistanceFunction):
         Raises
         ------
         IndexError
-            If the coords vector does not have three entries.
+            If the points does not have three entries.
         """
-        grid_coords = np.array(grid_coords)
-        if grid_coords.ndim == 1:
-            if len(grid_coords) != 3:
+        points_sdf = np.array(points_sdf)
+        if points_sdf.ndim == 1:
+            if len(points_sdf) != 3:
                 raise IndexError('Indexing must be 3 dimensional')
 
             # log warning if out of bounds access
-            if self.is_out_of_bounds(grid_coords):
+            if self.is_out_of_bounds(points_sdf):
                 # print('Out of bounds access. Snapping to GridSDF dims')
                 pass
 
             # snap to grid dims
-            grid_coords[0] = max(
-                0, min(grid_coords[0], self.dimensions[0] - 1))
-            grid_coords[1] = max(
-                0, min(grid_coords[1], self.dimensions[1] - 1))
-            grid_coords[2] = max(
-                0, min(grid_coords[2], self.dimensions[2] - 1))
-            index_coords = np.zeros(3)
+            points_sdf[0] = max(
+                0, min(points_sdf[0], self.dimensions[0] - 1))
+            points_sdf[1] = max(
+                0, min(points_sdf[1], self.dimensions[1] - 1))
+            points_sdf[2] = max(
+                0, min(points_sdf[2], self.dimensions[2] - 1))
+            index_point = np.zeros(3)
 
             # check points on surface
-            sdf_val = self[grid_coords]
+            sdf_val = self[points_sdf]
             if np.abs(sdf_val) >= self.surface_threshold:
                 return None
 
@@ -503,13 +503,13 @@ class GridSDF(SignedDistanceFunction):
                         d = np.array([dx, dy, dz])
                         if dx != 0 or dy != 0 or dz != 0:
                             d = delta * normalize_vector(d)
-                        index_coords[0] = grid_coords[0] + d[0]
-                        index_coords[1] = grid_coords[1] + d[1]
-                        index_coords[2] = grid_coords[2] + d[2]
-                        sdf_val = self[index_coords]
+                        index_point[0] = points_sdf[0] + d[0]
+                        index_point[1] = points_sdf[1] + d[1]
+                        index_point[2] = points_sdf[2] + d[2]
+                        sdf_val = self[index_point]
                         if np.abs(sdf_val) < self.surface_threshold:
-                            X.append([index_coords[0], index_coords[1],
-                                      index_coords[2], sdf_val])
+                            X.append([index_point[0], index_point[1],
+                                      index_point[2], sdf_val])
                         dz += delta
                     dy += delta
                 dx += delta
@@ -524,31 +524,31 @@ class GridSDF(SignedDistanceFunction):
             except np.linalg.LinAlgError:
                 return None
             return n
-        elif grid_coords.ndim == 2:
-            invalid_normals = self.is_out_of_bounds(grid_coords)
+        elif points_sdf.ndim == 2:
+            invalid_normals = self.is_out_of_bounds(points_sdf)
             valid_normals = np.logical_not(invalid_normals)
-            n = len(grid_coords)
+            n = len(points_sdf)
             indices = np.arange(n)[valid_normals]
             normals = np.nan * np.ones((n, 3))
-            grid_coords = grid_coords[valid_normals]
+            points_sdf = points_sdf[valid_normals]
 
-            if len(grid_coords) == 0:
+            if len(points_sdf) == 0:
                 return normals
-            grid_coords = np.maximum(
-                0, np.minimum(grid_coords, np.array(self.dimensions) - 1))
+            points_sdf = np.maximum(
+                0, np.minimum(points_sdf, np.array(self.dimensions) - 1))
 
             # check points on surface
-            sdf_val = self[grid_coords]
+            sdf_val = self[points_sdf]
             valid_surfaces = np.abs(sdf_val) < self.surface_threshold
             indices = indices[valid_surfaces]
 
-            grid_coords = grid_coords[valid_surfaces]
+            points_sdf = points_sdf[valid_surfaces]
 
-            if len(grid_coords) == 0:
+            if len(points_sdf) == 0:
                 return normals
 
             # collect all surface points within the delta sphere
-            X = np.inf * np.ones((len(grid_coords), 27, 4), dtype=np.float64)
+            X = np.inf * np.ones((len(points_sdf), 27, 4), dtype=np.float64)
             dx = - delta
             for i in range(3):
                 dy = - delta
@@ -558,10 +558,10 @@ class GridSDF(SignedDistanceFunction):
                         d = np.array([dx, dy, dz])
                         if dx != 0 or dy != 0 or dz != 0:
                             d = delta * normalize_vector(d)
-                        index_coords = grid_coords + d
-                        sdf_val = self[index_coords]
+                        index_point = points_sdf + d
+                        sdf_val = self[index_point]
                         flags = np.abs(sdf_val) < self.surface_threshold
-                        X[flags, (i * 9) + (j * 3) + k, :3] = index_coords[
+                        X[flags, (i * 9) + (j * 3) + k, :3] = index_point[
                             flags]
                         X[flags, (i * 9) + (j * 3) + k, 3] = sdf_val[flags]
                         dz += delta
