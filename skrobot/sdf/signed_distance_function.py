@@ -7,7 +7,11 @@ from skrobot.coordinates.math import normalize_vector
 from skrobot.coordinates.similarity_transform import \
     SimilarityTransformCoordinates
 
-class BoxSDF(SimilarityTransformCoordinates):
+class SignedDistanceFunction(SimilarityTransformCoordinates):
+    def __init__(self, *args, **kwargs):
+        super(SignedDistanceFunction, self).__init__(*args, **kwargs)
+
+class BoxSDF(SignedDistanceFunction):
 
     def __init__(self, origin, width,
                  *args, **kwargs):
@@ -71,7 +75,7 @@ class BoxSDF(SimilarityTransformCoordinates):
                     ray_tips.astype(np.float32))
             return x_sdf
 
-class GridSDF(SimilarityTransformCoordinates):
+class GridSDF(SignedDistanceFunction):
 
     def __init__(self, sdf_data, origin, resolution,
                  use_abs=True,
