@@ -8,20 +8,106 @@ from skrobot.coordinates.similarity_transform import \
     SimilarityTransformCoordinates
 
 class SignedDistanceFunction(SimilarityTransformCoordinates):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, origin, scale, *args, **kwargs):
         super(SignedDistanceFunction, self).__init__(*args, **kwargs)
+
+        self.sdf_to_grid_transform = SimilarityTransformCoordinates(
+            pos=origin,
+            scale=scale)
+
+        self._origin = np.array(origin)
+
+    @property
+    def origin(self):
+        """Return the location of the origin in the GridSDF grid.
+
+        Returns
+        -------
+        self._origin : numpy.ndarray
+            The 3-ndarray that contains the location of
+            the origin of the mesh grid in real space.
+        """
+        return self._origin
+
+    @property
+    def surface_threshold(self):
+        """Threshold of surface value.
+
+        Returns
+        -------
+        self._surface_threshold : float
+            threshold
+        """
+        return self._surface_threshold
+
+
+    def transform_pt_obj_to_grid(self, x_sdf, direction=False):
+        """Converts a point in sdf coords to the grid basis.
+
+        If direction is True, don't translate.
+
+        Parameters
+        ----------
+        x_sdf : numpy 3xN ndarray or numeric scalar
+            points to transform from sdf basis in meters to grid basis
+
+        Returns
+        -------
+        x_grid : numpy 3xN ndarray or scalar
+            points in grid basis
+        """
+        if isinstance(x_sdf, Number):
+            return self.copy_worldcoords().transform(
+                self.sdf_to_grid_transform
+            ).inverse_transformation().scale * x_sdf
+        if direction is True:
+            # 1 / s [R^T v - R^Tp] p == 0 case
+            x_grid = np.dot(x_sdf, self.copy_worldcoords().transform(
+                self.sdf_to_grid_transform).worldrot().T)
+        else:
+            x_grid = self.copy_worldcoords().transform(
+                self.sdf_to_grid_transform).inverse_transform_vector(x_sdf.T)
+        return x_grid
+
+    def transform_pt_grid_to_obj(self, x_grid, direction=False):
+        """Converts a point in grid coords to the obj basis.
+
+        If direction is True, then don't translate.
+
+        Parameters
+        ----------
+        x_grid : numpy.ndarray or numbers.Number
+            3xN ndarray or numeric scalar
+            points to transform from grid basis to sdf basis in meters
+        direction : bool
+            If this value is True, x_grid treated as normal vectors.
+
+        Returns
+        -------
+        x_sdf : numpy.ndarray
+            3xN ndarray. points in sdf basis (meters)
+        """
+        if isinstance(x_grid, Number):
+            return self.copy_worldcoords().transform(
+                self.sdf_to_grid_transform).scale * x_grid
+
+        if direction:
+            x_sdf = np.dot(x_grid, self.copy_worldcoords().transform(
+                self.sdf_to_grid_transform).worldrot().T)
+        else:
+            x_sdf = self.copy_worldcoords().transform(
+                self.sdf_to_grid_transform).transform_vector(
+                    x_grid.astype(np.float32).T)
+        return x_sdf
 
 class BoxSDF(SignedDistanceFunction):
 
     def __init__(self, origin, width,
                  *args, **kwargs):
-        super(BoxSDF, self).__init__(*args, **kwargs)
-        self._origin = np.array(origin)
+        scale = 1.0
+        super(BoxSDF, self).__init__(origin, scale, *args, **kwargs)
         self._width = np.array(width)
         self._surface_threshold = np.min(self._width) * 1e-2
-
-        self.sdf_to_grid_transform = SimilarityTransformCoordinates(
-            pos=self._origin)
 
     def _signed_distance(self, box_coords):
         """ compute signed distance
@@ -80,7 +166,7 @@ class GridSDF(SignedDistanceFunction):
     def __init__(self, sdf_data, origin, resolution,
                  use_abs=True,
                  *args, **kwargs):
-        super(GridSDF, self).__init__(*args, **kwargs)
+        super(GridSDF, self).__init__(origin, resolution, *args, **kwargs)
         self.num_interpolants = 8
         self.min_coords_x = [0, 2, 3, 5]
         self.max_coords_x = [1, 4, 6, 7]
@@ -90,7 +176,6 @@ class GridSDF(SignedDistanceFunction):
         self.max_coords_z = [3, 5, 6, 7]
 
         self._data = sdf_data
-        self._origin = origin
         self._dims = self.data.shape
         self.resolution = resolution
 
@@ -122,18 +207,6 @@ class GridSDF(SignedDistanceFunction):
         return self._dims
 
     @property
-    def origin(self):
-        """Return the location of the origin in the GridSDF grid.
-
-        Returns
-        -------
-        self._origin : numpy.ndarray
-            The 3-ndarray that contains the location of
-            the origin of the mesh grid in real space.
-        """
-        return self._origin
-
-    @property
     def resolution(self):
         """The grid resolution (how wide each grid cell is).
 
@@ -158,17 +231,6 @@ class GridSDF(SignedDistanceFunction):
         """
         self._resolution = res
         self._surface_threshold = res * np.sqrt(2) / 2.0
-
-    @property
-    def surface_threshold(self):
-        """Threshold of surface value.
-
-        Returns
-        -------
-        self._surface_threshold : float
-            threshold
-        """
-        return self._surface_threshold
 
     @property
     def center(self):
@@ -558,64 +620,6 @@ class GridSDF(SignedDistanceFunction):
 
         return surface_points, surface_values
 
-    def transform_pt_obj_to_grid(self, x_sdf, direction=False):
-        """Converts a point in sdf coords to the grid basis.
-
-        If direction is True, don't translate.
-
-        Parameters
-        ----------
-        x_sdf : numpy 3xN ndarray or numeric scalar
-            points to transform from sdf basis in meters to grid basis
-
-        Returns
-        -------
-        x_grid : numpy 3xN ndarray or scalar
-            points in grid basis
-        """
-        if isinstance(x_sdf, Number):
-            return self.copy_worldcoords().transform(
-                self.sdf_to_grid_transform
-            ).inverse_transformation().scale * x_sdf
-        if direction is True:
-            # 1 / s [R^T v - R^Tp] p == 0 case
-            x_grid = np.dot(x_sdf, self.copy_worldcoords().transform(
-                self.sdf_to_grid_transform).worldrot().T)
-        else:
-            x_grid = self.copy_worldcoords().transform(
-                self.sdf_to_grid_transform).inverse_transform_vector(x_sdf.T)
-        return x_grid
-
-    def transform_pt_grid_to_obj(self, x_grid, direction=False):
-        """Converts a point in grid coords to the obj basis.
-
-        If direction is True, then don't translate.
-
-        Parameters
-        ----------
-        x_grid : numpy.ndarray or numbers.Number
-            3xN ndarray or numeric scalar
-            points to transform from grid basis to sdf basis in meters
-        direction : bool
-            If this value is True, x_grid treated as normal vectors.
-
-        Returns
-        -------
-        x_sdf : numpy.ndarray
-            3xN ndarray. points in sdf basis (meters)
-        """
-        if isinstance(x_grid, Number):
-            return self.copy_worldcoords().transform(
-                self.sdf_to_grid_transform).scale * x_grid
-
-        if direction:
-            x_sdf = np.dot(x_grid, self.copy_worldcoords().transform(
-                self.sdf_to_grid_transform).worldrot().T)
-        else:
-            x_sdf = self.copy_worldcoords().transform(
-                self.sdf_to_grid_transform).transform_vector(
-                    x_grid.astype(np.float32).T)
-        return x_sdf
 
     @staticmethod
     def from_file(filepath):
