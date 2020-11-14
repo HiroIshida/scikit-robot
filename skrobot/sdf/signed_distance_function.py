@@ -8,12 +8,12 @@ from skrobot.coordinates.similarity_transform import \
     SimilarityTransformCoordinates
 
 
-class SDF(SimilarityTransformCoordinates):
+class GridSDF(SimilarityTransformCoordinates):
 
     def __init__(self, sdf_data, origin, resolution,
                  use_abs=True,
                  *args, **kwargs):
-        super(SDF, self).__init__(*args, **kwargs)
+        super(GridSDF, self).__init__(*args, **kwargs)
         self.num_interpolants = 8
         self.min_coords_x = [0, 2, 3, 5]
         self.max_coords_x = [1, 4, 6, 7]
@@ -45,7 +45,7 @@ class SDF(SimilarityTransformCoordinates):
 
     @property
     def dimensions(self):
-        """SDF dimension information.
+        """GridSDF dimension information.
 
         Returns
         -------
@@ -56,7 +56,7 @@ class SDF(SimilarityTransformCoordinates):
 
     @property
     def origin(self):
-        """Return the location of the origin in the SDF grid.
+        """Return the location of the origin in the GridSDF grid.
 
         Returns
         -------
@@ -162,7 +162,7 @@ class SDF(SimilarityTransformCoordinates):
 
     @property
     def data(self):
-        """The SDF data.
+        """The GridSDF data.
 
         Returns
         -------
@@ -192,7 +192,7 @@ class SDF(SimilarityTransformCoordinates):
             if len(grid_coords) != 3:
                 raise IndexError('Indexing must be 3 dimensional')
             if self.is_out_of_bounds(grid_coords):
-                # logging.debug('Out of bounds access. Snapping to SDF dims')
+                # logging.debug('Out of bounds access. Snapping to GridSDF dims')
                 pass
 
             # snap to grid dims
@@ -303,7 +303,7 @@ class SDF(SimilarityTransformCoordinates):
         """Returns the sdf surface normal at the given coordinates
 
         Returns the sdf surface normal at the given coordinates by
-        computing the tangent plane using SDF interpolation.
+        computing the tangent plane using GridSDF interpolation.
 
         Parameters
         ----------
@@ -332,7 +332,7 @@ class SDF(SimilarityTransformCoordinates):
 
             # log warning if out of bounds access
             if self.is_out_of_bounds(grid_coords):
-                # print('Out of bounds access. Snapping to SDF dims')
+                # print('Out of bounds access. Snapping to GridSDF dims')
                 pass
 
             # snap to grid dims
@@ -538,7 +538,7 @@ class SDF(SimilarityTransformCoordinates):
 
     @staticmethod
     def from_file(filepath):
-        """Return SDF instance from .sdf file.
+        """Return GridSDF instance from .sdf file.
 
         Parameters
         ----------
@@ -547,7 +547,7 @@ class SDF(SimilarityTransformCoordinates):
 
         Returns
         -------
-        sdf_instance : skrobot.exchange.sdf.SDF
+        sdf_instance : skrobot.exchange.sdf.GridSDF
             instance of sdf
         """
         with open(filepath, 'r') as f:
@@ -568,14 +568,14 @@ class SDF(SimilarityTransformCoordinates):
                     for i in range(nx):
                         sdf_data[i][j][k] = float(f.readline())
                         count += 1
-        return SDF(sdf_data, origin, resolution)
+        return GridSDF(sdf_data, origin, resolution)
 
     @staticmethod
     def from_objfile(obj_filepath, dim=100, padding=5):
-        """Return SDF instance from .obj file.
+        """Return GridSDF instance from .obj file.
 
         This file Internally create .sdf file from .obj file.
-        Converting obj to SDF tooks a some time.
+        Converting obj to GridSDF tooks a some time.
 
         Parameters
         ----------
@@ -588,8 +588,8 @@ class SDF(SimilarityTransformCoordinates):
 
         Returns
         -------
-        sdf_instance : skrobot.exchange.sdf.SDF
+        sdf_instance : skrobot.exchange.sdf.GridSDF
             instance of sdf
         """
         sdf_filepath = pysdfgen.obj2sdf(str(obj_filepath), dim, padding)
-        return SDF.from_file(sdf_filepath)
+        return GridSDF.from_file(sdf_filepath)
