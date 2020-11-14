@@ -14,8 +14,26 @@ class SignedDistanceFunction(SimilarityTransformCoordinates):
         self.sdf_to_grid_transform = SimilarityTransformCoordinates(
             pos=origin,
             scale=scale)
-
         self._origin = np.array(origin)
+
+    def __call__(self, x_sdf):
+        """ compute signed distance
+        Parameters
+        -------
+        x_sdf : 2d numpy.ndarray (n_point x 3)
+            input points w.r.t sdf coordinate system
+        Returns
+        ------
+        singed distances : 1d numpy.ndarray (n_point)
+        """
+        grid_coords = self.transform_pt_obj_to_grid(x_sdf.T)
+        sd = self._signed_distance(grid_coords)
+        return sd
+
+    def surface_points(self, **kwargs):
+        points_, dists = self._surface_points(**kwargs)
+        points = self.transform_pt_grid_to_obj(points_.T)
+        return points.T, dists
 
     @property
     def origin(self):
@@ -137,7 +155,7 @@ class BoxSDF(SignedDistanceFunction):
         sd = left + right
         return sd
 
-    def surface_points(self, N=20, grid_basis=True):
+    def _surface_points(self, N=20):
         # surface points by raymarching
         vecs = np.random.randn(N, 3)
         norms = np.linalg.norm(vecs, axis=1).reshape(-1, 1)
@@ -152,14 +170,9 @@ class BoxSDF(SignedDistanceFunction):
             ray_tips += ray_directions * np.repeat(sd, 3, axis=1)
             if np.all(np.abs(sd) < self._surface_threshold):
                 break
+        sd_final = self._signed_distance(ray_tips).reshape(N, -1)
 
-        if grid_basis:
-            return ray_tips
-        else:
-            x_sdf = self.copy_worldcoords().transform(
-                self.sdf_to_grid_transform).transform_vector(
-                    ray_tips.astype(np.float32))
-            return x_sdf
+        return ray_tips, sd_final
 
 class GridSDF(SignedDistanceFunction):
 
@@ -412,20 +425,6 @@ class GridSDF(SignedDistanceFunction):
         else:
             raise ValueError
 
-    def __call__(self, x_sdf):
-        """ compute signed distance
-        Parameters
-        -------
-        x_sdf : 2d numpy.ndarray (n_point x 3)
-            input points w.r.t sdf coordinate system
-        Returns
-        ------
-        singed distances : 1d numpy.ndarray (n_point)
-        """
-        grid_coords = self.transform_pt_obj_to_grid(x_sdf.T)
-        sd = self[grid_coords]
-        return sd
-
     def __getitem__(self, grid_coords):
         """Returns the signed distance at the given coordinates.
 
@@ -588,7 +587,7 @@ class GridSDF(SignedDistanceFunction):
         else:
             raise ValueError
 
-    def surface_points(self, grid_basis=True):
+    def _surface_points(self):
         """Returns the points on the surface.
 
         Parameters
@@ -611,15 +610,7 @@ class GridSDF(SignedDistanceFunction):
         surface_values = self.data[surface_points[:, 0],
                                    surface_points[:, 1],
                                    surface_points[:, 2]]
-
-        print('start')
-        if not grid_basis:
-            surface_points = self.transform_pt_grid_to_obj(surface_points.T)
-            surface_points = surface_points.T
-        print('end')
-
         return surface_points, surface_values
-
 
     @staticmethod
     def from_file(filepath):
