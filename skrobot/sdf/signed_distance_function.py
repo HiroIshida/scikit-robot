@@ -7,6 +7,69 @@ from skrobot.coordinates.math import normalize_vector
 from skrobot.coordinates.similarity_transform import \
     SimilarityTransformCoordinates
 
+class BoxSDF(SimilarityTransformCoordinates):
+
+    def __init__(self, origin, width,
+                 *args, **kwargs):
+        super(BoxSDF, self).__init__(*args, **kwargs)
+        self._origin = np.array(origin)
+        self._width = np.array(width)
+        self._surface_threshold = np.min(self._width) * 1e-2
+
+        self.sdf_to_grid_transform = SimilarityTransformCoordinates(
+            pos=self._origin)
+
+    def _signed_distance(self, box_coords):
+        """ compute signed distance
+        Parameters
+        -------
+        box_coords : 2d numpy.ndarray (n_point x 3)
+            input points w.r.t box coordinates
+        Returns
+        ------
+        singed distances : 1d numpy.ndarray (n_point)
+        """
+        n_pts, dim = box_coords.shape
+        assert dim == 3, "dim must be 3"
+
+        b = self._width * 0.5
+        c = self._origin 
+
+        center = np.array(c).reshape(1, dim)
+        center_copied = np.repeat(center, n_pts, axis=0)
+        P = box_coords - center_copied
+        Q = np.abs(P) - np.repeat(np.array(b).reshape(1, dim), n_pts, axis=0)
+        left__ = np.array([Q, np.zeros((n_pts, dim))])
+        left_ = np.max(left__, axis=0)
+        left = np.sqrt(np.sum(left_**2, axis=1))
+        right_ = np.max(Q, axis=1)
+        right = np.min(np.array([right_, np.zeros(n_pts)]), axis=0)
+        sd = left + right
+        return sd
+
+    def surface_points(self, N=20, grid_basis=True):
+        # surface points by raymarching
+        vecs = np.random.randn(N, 3)
+        norms = np.linalg.norm(vecs, axis=1).reshape(-1, 1)
+        unit_vecs = vecs / np.repeat(norms, 3, axis=1)
+
+        # start ray marching
+        ray_directions = unit_vecs
+        ray_tips = np.zeros((N, 3))
+        self._signed_distance(ray_tips)
+        while True:
+            sd = self._signed_distance(ray_tips).reshape(N, -1)
+            ray_tips += ray_directions * np.repeat(sd, 3, axis=1)
+            if np.all(np.abs(sd) < self._surface_threshold):
+                break
+
+        if grid_basis:
+            return ray_tips
+        else:
+            x_sdf = self.copy_worldcoords().transform(
+                self.sdf_to_grid_transform).transform_vector(
+                    ray_tips.astype(np.float32))
+            return x_sdf
 
 class GridSDF(SimilarityTransformCoordinates):
 
@@ -282,6 +345,20 @@ class GridSDF(SimilarityTransformCoordinates):
             return sd
         else:
             raise ValueError
+
+    def __call__(self, x_sdf):
+        """ compute signed distance
+        Parameters
+        -------
+        x_sdf : 2d numpy.ndarray (n_point x 3)
+            input points w.r.t sdf coordinate system
+        Returns
+        ------
+        singed distances : 1d numpy.ndarray (n_point)
+        """
+        grid_coords = self.transform_pt_obj_to_grid(x_sdf.T)
+        sd = self[grid_coords]
+        return sd
 
     def __getitem__(self, grid_coords):
         """Returns the signed distance at the given coordinates.
