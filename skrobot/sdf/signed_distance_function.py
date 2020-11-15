@@ -7,6 +7,33 @@ from skrobot.coordinates.math import normalize_vector
 from skrobot.coordinates.similarity_transform import \
     SimilarityTransformCoordinates
 
+class UnionSDF(object):
+    """UinonSDF is Not a child of CascadedCoords
+    """
+    def __init__(self, sdf_list):
+        self.sdf_list = sdf_list
+
+    def __call__(self, points_obj):
+        sd_vals_list = np.array([sdf(points_obj) for sdf in self.sdf_list])
+        sd_vals_union = np.min(sd_vals_list, axis=0)
+        return sd_vals_union
+
+    def on_surface(self, points_obj):
+        # TODO duplication with SignedDistanceFunction
+        sd_vals = self.__call__(points_obj)
+        logicals = np.abs(sd_vals) < self.surface_threshold
+        return logicals, sd_vals
+
+    @property
+    def surface_threshold(self):
+        threshold_list = [sdf.surface_threshold for sdf in self.sdf_list]
+        return max(threshold_list)
+
+    def surface_points(self):
+        points = np.vstack([sdf.surface_points()[0] for sdf in self.sdf_list])
+        logicals, sd_vals = self.on_surface(points)
+        return points[logicals], sd_vals[logicals]
+
 class SignedDistanceFunction(SimilarityTransformCoordinates):
     def __init__(self, origin, scale, *args, **kwargs):
         super(SignedDistanceFunction, self).__init__(*args, **kwargs)
@@ -42,9 +69,9 @@ class SignedDistanceFunction(SimilarityTransformCoordinates):
         -------
         :obj:`tuple` of numpy.ndarray[bool], ndarray[float]
         """
-        sdf_vals = self.__call__(points_obj)
-        logicals = np.abs(sdf_vals) < self.surface_threshold
-        return logicals, sdf_vals
+        sd_vals = self.__call__(points_obj)
+        logicals = np.abs(sd_vals) < self.surface_threshold
+        return logicals, sd_vals
 
     def surface_points(self, **kwargs):
         points_, dists = self._surface_points(**kwargs)
