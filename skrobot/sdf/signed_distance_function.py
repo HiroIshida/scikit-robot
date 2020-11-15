@@ -170,7 +170,7 @@ class BoxSDF(SignedDistanceFunction):
             ray_tips += ray_directions * np.repeat(sd, 3, axis=1)
             if np.all(np.abs(sd) < self._surface_threshold):
                 break
-        sd_final = self._signed_distance(ray_tips).reshape(N, -1)
+        sd_final = self._signed_distance(ray_tips)
 
         return ray_tips, sd_final
 
@@ -268,14 +268,13 @@ class GridSDF(SignedDistanceFunction):
 
         Returns
         -------
-        :obj:`tuple` of bool, float
-            Is the point on the object's surface, and what
-            is the signed distance at that point?
+        :obj:`tuple` of numpy.ndarray[bool], float
+            If the points on th surface and the corresponding 
+            signed distances
         """
         sdf_val = self[points_sdf]
-        if np.abs(sdf_val) < self.surface_threshold:
-            return True, sdf_val
-        return False, sdf_val
+        logicals = np.abs(sdf_val) < self.surface_threshold
+        return logicals, sdf_val
 
     def is_out_of_bounds(self, points_sdf):
         """Returns True if points is an out of bounds access.
