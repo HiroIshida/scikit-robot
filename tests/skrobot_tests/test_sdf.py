@@ -55,7 +55,7 @@ class TestSDF(unittest.TestCase):
     def test__transform_pts_obj_to_sdf_and_sdf_to_obj(self):
         sdf, model, trans = self.boxsdf, self.boxmodel, self.boxtrans
         points_obj = np.random.randn(100, 3)
-        points_sdf = sdf.transform_pts_obj_to_sdf(points_obj.T)
+        points_sdf = sdf.transform_pts_obj_to_sdf(points_obj)
 
         # test transform_pts_obj_to_sdf
         points_sdf_should_be = points_obj - \
@@ -63,7 +63,7 @@ class TestSDF(unittest.TestCase):
         testing.assert_array_almost_equal(points_sdf, points_sdf_should_be)
 
         # test transform_pts_sdf_to_obj
-        points_obj_recreated = sdf.transform_pts_sdf_to_obj(points_sdf.T)
+        points_obj_recreated = sdf.transform_pts_sdf_to_obj(points_sdf)
         testing.assert_array_almost_equal(points_obj_recreated, points_obj)
 
     def test___call__(self):
@@ -76,13 +76,13 @@ class TestSDF(unittest.TestCase):
     def test_surface_points(self):
         sdf, model = self.boxsdf, self.boxmodel
         surface_points_obj, _ = sdf.surface_points(N=20)
-        sdf_vals = sdf(surface_points_obj.T)
+        sdf_vals = sdf(surface_points_obj)
         assert np.all(np.abs(sdf_vals) < sdf._surface_threshold)
 
     def test_gridsdf_is_out_of_bounds(self):
         sdf, mesh = self.gridsdf, self.bunnymesh
         vertices_obj = mesh.vertices
-        vertices_sdf = sdf.transform_pts_obj_to_sdf(vertices_obj.T)
+        vertices_sdf = sdf.transform_pts_obj_to_sdf(vertices_obj)
         b_min = np.min(vertices_sdf, axis=0)
         b_max = np.max(vertices_sdf, axis=0)
         center = 0.5 * (b_min + b_max)
@@ -98,7 +98,7 @@ class TestSDF(unittest.TestCase):
     def test_gridsdf__signed_distance(self):
         sdf, mesh = self.gridsdf, self.bunnymesh
         vertices_obj = mesh.vertices
-        vertices_sdf = sdf.transform_pts_obj_to_sdf(vertices_obj.T)
+        vertices_sdf = sdf.transform_pts_obj_to_sdf(vertices_obj)
         sd_vals = sdf._signed_distance(vertices_sdf)
         assert np.all(np.abs(sd_vals) < sdf._surface_threshold) 
 
@@ -106,7 +106,7 @@ class TestSDF(unittest.TestCase):
         # TODO this method must be w.r.t. the obj coordinate
         sdf, mesh = self.gridsdf, self.bunnymesh
         vertices_obj = mesh.vertices
-        vertices_sdf = sdf.transform_pts_obj_to_sdf(vertices_obj.T)
+        vertices_sdf = sdf.transform_pts_obj_to_sdf(vertices_obj)
         logicals_should_be_postive, _ = sdf.on_surface(vertices_sdf)
         # vertices must be on surface
         assert np.all(logicals_should_be_postive) 

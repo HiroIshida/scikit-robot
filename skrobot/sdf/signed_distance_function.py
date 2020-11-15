@@ -26,14 +26,14 @@ class SignedDistanceFunction(SimilarityTransformCoordinates):
         ------
         singed distances : 1d numpy.ndarray (n_point)
         """
-        points_sdf = self.transform_pts_obj_to_sdf(points_obj.T)
+        points_sdf = self.transform_pts_obj_to_sdf(points_obj)
         sd = self._signed_distance(points_sdf)
         return sd
 
     def surface_points(self, **kwargs):
         points_, dists = self._surface_points(**kwargs)
-        points = self.transform_pts_sdf_to_obj(points_.T)
-        return points.T, dists
+        points = self.transform_pts_sdf_to_obj(points_)
+        return points, dists
 
     @property
     def origin(self):
@@ -66,25 +66,26 @@ class SignedDistanceFunction(SimilarityTransformCoordinates):
 
         Parameters
         ----------
-        points_obj : numpy 3xN ndarray or numeric scalar
+        points_obj : numpy Nx3 ndarray or numeric scalar
             points to transform from sdf basis in meters to grid basis
 
         Returns
         -------
-        points_sdf : numpy 3xN ndarray or scalar
+        points_sdf : numpy Nx3 ndarray or scalar
             points in grid basis
         """
         if isinstance(points_obj, Number):
             return self.copy_worldcoords().transform(
                 self.sdf_to_obj_transform
-            ).inverse_transformation().scale * points_obj
+            ).inverse_transformation().scale * points_obj.T
         if direction is True:
             # 1 / s [R^T v - R^Tp] p == 0 case
-            points_sdf = np.dot(points_obj, self.copy_worldcoords().transform(
+            points_sdf = np.dot(points_obj.T, self.copy_worldcoords().transform(
                 self.sdf_to_obj_transform).worldrot().T)
         else:
+            print(points_obj)
             points_sdf = self.copy_worldcoords().transform(
-                self.sdf_to_obj_transform).inverse_transform_vector(points_obj.T)
+                self.sdf_to_obj_transform).inverse_transform_vector(points_obj)
         return points_sdf
 
     def transform_pts_sdf_to_obj(self, points_sdf, direction=False):
@@ -95,7 +96,7 @@ class SignedDistanceFunction(SimilarityTransformCoordinates):
         Parameters
         ----------
         points_sdf : numpy.ndarray or numbers.Number
-            3xN ndarray or numeric scalar
+            Nx3 ndarray or numeric scalar
             points to transform from grid basis to sdf basis in meters
         direction : bool
             If this value is True, points_sdf treated as normal vectors.
@@ -103,19 +104,19 @@ class SignedDistanceFunction(SimilarityTransformCoordinates):
         Returns
         -------
         points_obj : numpy.ndarray
-            3xN ndarray. points in sdf basis (meters)
+            Nx3 ndarray. points in sdf basis (meters)
         """
         if isinstance(points_sdf, Number):
             return self.copy_worldcoords().transform(
                 self.sdf_to_obj_transform).scale * points_sdf
 
         if direction:
-            points_obj = np.dot(points_sdf, self.copy_worldcoords().transform(
+            points_obj = np.dot(points_sdf.T, self.copy_worldcoords().transform(
                 self.sdf_to_obj_transform).worldrot().T)
         else:
             points_obj = self.copy_worldcoords().transform(
                 self.sdf_to_obj_transform).transform_vector(
-                    points_sdf.astype(np.float32).T)
+                    points_sdf.astype(np.float32))
         return points_obj
 
 class BoxSDF(SignedDistanceFunction):
