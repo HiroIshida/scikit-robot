@@ -2,6 +2,57 @@ import scipy
 import numpy as np
 import copy
 
+def inverse_kinematics_slsqp(self, 
+                             target_coords,
+                             link_list,
+                             end_effector_cascaded_coords,
+                             ):
+    joint_list = [link.joint for link in link_list]
+    joint_limits = [[j.min_angle, j.max_angle] for j in joint_list]
+
+    def set_joint_angles(av):
+        return [j.joint_angle(a) for j, a in zip(joint_list, av)]
+
+    def get_joint_angles():
+        return np.array([j.joint_angle() for j in joint_list])
+
+    def compute_jacobian_wrt_baselink(av0, move_target, rot_also=False):
+        set_joint_angles(av0)
+        base_link = self.link_list[0]
+        J = self.calc_jacobian_from_link_list([move_target], link_list,
+                                              transform_coords=base_link,
+                                              rotation_axis=rot_also)
+        return J
+
+    def endcoord_forward_kinematics(av, rotalso=True):
+        def quaternion_kinematic_matrix(q):
+            # dq/dt = 0.5 * mat * omega 
+            q1, q2, q3, q4 = q
+            mat = np.array([
+                [-q2, -q3, -q4], [q1, q4, -q3], [-q4, q1, q2], [q3, -q2, q1],
+                ])
+            return mat * 0.5
+
+        J_geometric = compute_jacobian_wrt_baselink(av, end_effector_cascaded_coords, rot_also=rotalso)
+        J_geo_pos = J_geometric[:3]
+
+        pos = end_effector_cascaded_coords.worldpos()
+        if rotalso:
+            rot = end_effector_cascaded_coords.worldcoords().quaternion
+            pose = np.hstack((pos, rot))
+            kine_mat = quaternion_kinematic_matrix(rot)
+            J_geo_rot = J_geometric[3:]
+            J_geo_quat = kine_mat.dot(J_geo_rot)
+            J = np.vstack((J_geo_pos, J_geo_quat))
+        else:
+            pose = pos
+            J = J_geo_pos
+        return pos, J
+
+    av_solved = inverse_kinematics_slsqp_common(get_joint_angles(), endcoord_forward_kinematics, joint_limits,
+            target_coords.worldpos())
+    set_joint_angles(av_solved)
+    return av_solved
 
 def plan_trajectory(self,
                     target_coords,
@@ -142,6 +193,28 @@ def scipinize(fun):
         return closure_member['jac_cache']
     return fun_scipinized, fun_scipinized_jac
 
+def inverse_kinematics_slsqp_common(av_init, 
+        endeffector_fk, 
+        joint_limits, 
+        pos_target, 
+        rot_target=None):
+
+        def fun_objective(av):
+            if rot_target is None:
+                position, jac = endeffector_fk(av, rotalso=False)
+                diff = position - pos_target
+                cost = np.linalg.norm(diff)
+                cost_grad = 2 * diff.dot(jac)
+            else:
+                raise NotImplementedError
+                pose, jac = endeffector_fk(av, rotalso=True)
+            return cost, cost_grad
+
+        f, jac = scipinize(fun_objective)
+
+        res = scipy.optimize.minimize(
+                f, av_init, method='SLSQP', jac=jac, bounds=joint_limits)
+        return res.x
 
 class GradBasedPlannerCommon:
     def __init__(self, av_seq_init, n_features,
