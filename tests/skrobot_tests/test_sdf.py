@@ -79,6 +79,16 @@ class TestSDF(unittest.TestCase):
         sdf_vals = sdf(surface_points_obj)
         assert np.all(np.abs(sdf_vals) < sdf._surface_threshold)
 
+    def test_on_surface(self):
+        sdf, model = self.boxsdf, self.boxmodel
+        points_box_edge_obj = sdf.transform_pts_sdf_to_obj(self.points_box_edge_sdf)
+        logicals_positive, _ = sdf.on_surface(points_box_edge_obj)
+        assert np.all(logicals_positive) 
+
+        points_origin = np.zeros((1, 3))
+        logicals_negative, _ = sdf.on_surface(points_origin)
+        assert np.all(~logicals_negative)
+
     def test_gridsdf_is_out_of_bounds(self):
         sdf, mesh = self.gridsdf, self.bunnymesh
         vertices_obj = mesh.vertices
@@ -102,32 +112,8 @@ class TestSDF(unittest.TestCase):
         sd_vals = sdf._signed_distance(vertices_sdf)
         assert np.all(np.abs(sd_vals) < sdf._surface_threshold) 
 
-    def test_gridsdf_on_surface(self):
-        # TODO this method must be w.r.t. the obj coordinate
-        sdf, mesh = self.gridsdf, self.bunnymesh
-        vertices_obj = mesh.vertices
-        vertices_sdf = sdf.transform_pts_obj_to_sdf(vertices_obj)
-        logicals_should_be_postive, _ = sdf.on_surface(vertices_sdf)
-        # vertices must be on surface
-        assert np.all(logicals_should_be_postive) 
-
-        # compute bounding box
-        b_min = np.min(vertices_sdf, axis=0)
-        b_max = np.max(vertices_sdf, axis=0)
-        center = 0.5 * (b_min + b_max)
-        width = b_max - b_min
-        eps = 1e-2
-        points_outer_bbox = np.array([
-            center + (0.5 + eps) * width,
-            center - (0.5 + eps) * width
-            ])
-        logicals_should_be_negative, _ = sdf.on_surface(points_outer_bbox)
-        # points in slightly outside of box must be out of the surface
-        assert np.all(~logicals_should_be_negative) 
-
     def test_gridsdf_surface_points(self):
         sdf, mesh = self.gridsdf, self.bunnymesh
         surf_points_obj, _ = sdf.surface_points()
-        surf_points_sdf = sdf.transform_pts_obj_to_sdf(surf_points_obj)
-        logicals, _ = sdf.on_surface(surf_points_sdf)
+        logicals, _ = sdf.on_surface(surf_points_obj)
         assert np.all(logicals) 

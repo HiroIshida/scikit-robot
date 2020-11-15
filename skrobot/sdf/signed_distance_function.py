@@ -30,6 +30,22 @@ class SignedDistanceFunction(SimilarityTransformCoordinates):
         sd = self._signed_distance(points_sdf)
         return sd
 
+    def on_surface(self, points_obj):
+        """Determines whether or not a point is on the object surface.
+
+        Parameters
+        ----------
+        points_obj : :obj:`numpy.ndarray` 
+            Nx3 ndarray w.r.t obj
+
+        Returns
+        -------
+        :obj:`tuple` of numpy.ndarray[bool], ndarray[float]
+        """
+        sdf_vals = self.__call__(points_obj)
+        logicals = np.abs(sdf_vals) < self.surface_threshold
+        return logicals, sdf_vals
+
     def surface_points(self, **kwargs):
         points_, dists = self._surface_points(**kwargs)
         points = self.transform_pts_sdf_to_obj(points_)
@@ -156,7 +172,7 @@ class BoxSDF(SignedDistanceFunction):
         sd = left + right
         return sd
 
-    def _surface_points(self, N=20):
+    def _surface_points(self, N=1000):
         # surface points by raymarching
         vecs = np.random.randn(N, 3)
         norms = np.linalg.norm(vecs, axis=1).reshape(-1, 1)
@@ -257,25 +273,6 @@ class GridSDF(SignedDistanceFunction):
         :obj:`numpy.ndarray`
         """
         return self._center
-
-    def on_surface(self, points_sdf):
-        """Determines whether or not a point is on the object surface.
-
-        Parameters
-        ----------
-        points_sdf : :obj:`numpy.ndarray` of int
-            A 2- or 3-dimensional ndarray that indicates the desired
-            coordinates in the grid.
-
-        Returns
-        -------
-        :obj:`tuple` of numpy.ndarray[bool], float
-            If the points on th surface and the corresponding 
-            signed distances
-        """
-        sdf_val = self[points_sdf]
-        logicals = np.abs(sdf_val) < self.surface_threshold
-        return logicals, sdf_val
 
     def is_out_of_bounds(self, points_sdf):
         """Returns True if points is an out of bounds access.
