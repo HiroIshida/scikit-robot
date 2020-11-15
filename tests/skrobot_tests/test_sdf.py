@@ -1,3 +1,6 @@
+# The testing order is 
+# BoxSDF -> SignedDistanceFunction -> GridSDF
+
 import unittest
 import os
 import numpy as np
@@ -11,6 +14,7 @@ class TestSDF(unittest.TestCase):
     def setup_class(cls):
         # prepare gridsdf
         objfile_path = skrobot.data.bunny_objpath()
+        bunnymesh = trimesh.load_mesh(objfile_path)
         filename, extension = os.path.splitext(objfile_path)
         sdffile_path = filename + ".sdf"
         if os.path.exists(sdffile_path):
@@ -18,6 +22,7 @@ class TestSDF(unittest.TestCase):
         else:
             gridsdf = skrobot.sdf.GridSDF.from_objfile(objfile_path)
         cls.gridsdf = gridsdf
+        cls.bunnymesh = bunnymesh
 
         # prepare boxsdf and boxmodel
         boxsdf = skrobot.sdf.BoxSDF([0, 0, 0], [0.005, 0.01, 0.1])
@@ -73,3 +78,32 @@ class TestSDF(unittest.TestCase):
         surface_points_obj, _ = sdf.surface_points(N=20)
         sdf_vals = sdf(surface_points_obj.T)
         assert np.all(np.abs(sdf_vals) < sdf._surface_threshold)
+
+    def test_gridsdf__signed_distance(self):
+        sdf, mesh = self.gridsdf, self.bunnymesh
+        vertices_obj = mesh.vertices
+        vertices_sdf = sdf.transform_pts_obj_to_sdf(vertices_obj.T)
+        sd_vals = sdf._signed_distance(vertices_sdf)
+        assert np.all(np.abs(sd_vals) < sdf._surface_threshold) 
+
+    def test_gridsdf_on_surface(self):
+        sdf, mesh = self.gridsdf, self.bunnymesh
+        vertices_obj = mesh.vertices
+        vertices_sdf = sdf.transform_pts_obj_to_sdf(vertices_obj.T)
+        logicals_should_be_postive = sdf.on_surface(vertices_sdf)
+        # vertices must be on surface
+        assert np.all(logicals_should_be_postive) 
+
+        # compute bounding box
+        b_min = np.min(vertices_sdf, axis=0)
+        b_max = np.max(vertices_sdf, axis=0)
+        center = 0.5 * (b_min + b_max)
+        width = b_max - b_min
+        eps = 1e-2
+        points_outer_bbox = np.array([
+            center + (0.5 + eps) * width,
+            center - (0.5 + eps) * width
+            ])
+        logicals_should_be_negative = sdf.on_surface(points_outer_bbox)
+        # points in slightly outside of box must be out of the surface
+        assert ~np.all(logicals_should_be_negative) 
