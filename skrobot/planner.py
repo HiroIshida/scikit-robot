@@ -47,10 +47,10 @@ def inverse_kinematics_slsqp(self,
         else:
             pose = pos
             J = J_geo_pos
-        return pos, J
+        return pose, J
 
     av_solved = inverse_kinematics_slsqp_common(get_joint_angles(), endcoord_forward_kinematics, joint_limits,
-            target_coords.worldpos())
+            target_coords.worldpos(), target_coords.worldcoords().quaternion)
     set_joint_angles(av_solved)
     return av_solved
 
@@ -203,17 +203,28 @@ def inverse_kinematics_slsqp_common(av_init,
             if rot_target is None:
                 position, jac = endeffector_fk(av, rotalso=False)
                 diff = position - pos_target
-                cost = np.linalg.norm(diff)
+                cost = np.linalg.norm(diff) ** 2
                 cost_grad = 2 * diff.dot(jac)
             else:
-                raise NotImplementedError
+                #https://math.stackexchange.com/questions/90081/quaternion-distance
                 pose, jac = endeffector_fk(av, rotalso=True)
+                position, rot = pose[:3], pose[3:]
+                pos_diff = position - pos_target
+                cost_position = np.linalg.norm(position - pos_target) ** 2
+                cost_position_grad = 2 * pos_diff.dot(jac[:3, :])
+
+                inpro = np.sum(rot * rot_target)
+                cost_rotation = 1 - inpro ** 2
+                cost_rotation_grad = - 2 * inpro * rot_target.dot(jac[3:, :])
+
+                cost = cost_position + cost_rotation
+                cost_grad = cost_position_grad + cost_rotation_grad
             return cost, cost_grad
 
         f, jac = scipinize(fun_objective)
-
         res = scipy.optimize.minimize(
-                f, av_init, method='SLSQP', jac=jac, bounds=joint_limits)
+                f, av_init, method='SLSQP', jac=jac, bounds=joint_limits,
+                options={'ftol': 1e-4, 'disp': False})
         return res.x
 
 class GradBasedPlannerCommon:
