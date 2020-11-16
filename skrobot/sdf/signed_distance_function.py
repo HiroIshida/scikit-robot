@@ -12,6 +12,10 @@ class UnionSDF(object):
     """UinonSDF is Not a child of CascadedCoords
     """
     def __init__(self, sdf_list):
+        use_abs_list = [sdf.use_abs for sdf in sdf_list]
+        all_false = np.all(np.array(use_abs_list) == False)
+        assert all_false, "use_abs for each sdf must be consistent"
+
         self.sdf_list = sdf_list
 
     def __call__(self, points_obj):
@@ -33,16 +37,18 @@ class UnionSDF(object):
     def surface_points(self):
         points = np.vstack([sdf.surface_points()[0] for sdf in self.sdf_list])
         logicals, sd_vals = self.on_surface(points)
+        #import IPython; IPython.embed()
         return points[logicals], sd_vals[logicals]
 
 class SignedDistanceFunction(SimilarityTransformCoordinates):
-    def __init__(self, origin, scale, *args, **kwargs):
+    def __init__(self, origin, scale, use_abs=False, *args, **kwargs):
         super(SignedDistanceFunction, self).__init__(*args, **kwargs)
 
         self.sdf_to_obj_transform = SimilarityTransformCoordinates(
             pos=origin,
             scale=scale)
         self._origin = np.array(origin)
+        self.use_abs = use_abs
 
     def __call__(self, points_obj):
         """ compute signed distance
@@ -164,10 +170,10 @@ class SignedDistanceFunction(SimilarityTransformCoordinates):
 
 class BoxSDF(SignedDistanceFunction):
 
-    def __init__(self, origin, width,
+    def __init__(self, origin, width, use_abs=False,
                  *args, **kwargs):
         scale = 1.0
-        super(BoxSDF, self).__init__(origin, scale, *args, **kwargs)
+        super(BoxSDF, self).__init__(origin, scale, use_abs, *args, **kwargs)
         self._width = np.array(width)
         self._surface_threshold = np.min(self._width) * 1e-2
 
@@ -220,13 +226,15 @@ class BoxSDF(SignedDistanceFunction):
 
 class GridSDF(SignedDistanceFunction):
 
-    def __init__(self, sdf_data, origin, resolution,
-                 use_abs=True,
+    def __init__(self, sdf_data, origin, resolution, use_abs=False,
                  *args, **kwargs):
-        super(GridSDF, self).__init__(origin, resolution, *args, **kwargs)
-        self._data = sdf_data
+        super(GridSDF, self).__init__(origin, resolution, use_abs=use_abs, *args, **kwargs)
+        # optionally use only the absolute values
+        # (useful for non-closed meshes in 3D)
+        self._data = np.abs(sdf_data) if use_abs else sdf_data
         self._dims = np.array(self.data.shape)
         self.resolution = resolution
+
 
         # create regular grid interpolator
         xlin, ylin, zlin = [range(d) for d in self.data.shape]
@@ -243,11 +251,6 @@ class GridSDF(SignedDistanceFunction):
             pos=self.origin,
             scale=self.resolution)
 
-        # optionally use only the absolute values
-        # (useful for non-closed meshes in 3D)
-        self.use_abs = use_abs
-        if use_abs:
-            self._data = np.abs(self.data)
 
     @property
     def dimensions(self):
