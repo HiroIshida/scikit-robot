@@ -225,7 +225,7 @@ class GridSDF(SignedDistanceFunction):
                  *args, **kwargs):
         super(GridSDF, self).__init__(origin, resolution, *args, **kwargs)
         self._data = sdf_data
-        self._dims = self.data.shape
+        self._dims = np.array(self.data.shape)
         self.resolution = resolution
 
         # create regular grid interpolator
@@ -233,6 +233,7 @@ class GridSDF(SignedDistanceFunction):
         self.itp = RegularGridInterpolator(
                 (xlin, ylin, zlin), 
                 sdf_data,
+                bounds_error=False,
                 fill_value=np.inf)
 
         spts, _ = self.surface_points()

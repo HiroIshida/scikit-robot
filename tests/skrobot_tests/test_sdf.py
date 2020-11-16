@@ -110,7 +110,13 @@ class TestSDF(unittest.TestCase):
         vertices_obj = mesh.vertices
         vertices_sdf = sdf.transform_pts_obj_to_sdf(vertices_obj)
         sd_vals = sdf._signed_distance(vertices_sdf)
+        # all vertices of the mesh must be on the surface
         assert np.all(np.abs(sd_vals) < sdf._surface_threshold) 
+
+        # sd of points outside of bounds must be np.inf
+        point_outofbound = (sdf.dimensions + 1).reshape(1, 3)
+        sd_vals = sdf._signed_distance(point_outofbound)
+        assert np.all(np.isinf(sd_vals))
 
     def test_gridsdf_surface_points(self):
         sdf, mesh = self.gridsdf, self.bunnymesh
