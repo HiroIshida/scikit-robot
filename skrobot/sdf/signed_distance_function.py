@@ -2,7 +2,7 @@ from numbers import Number
 
 import numpy as np
 import pysdfgen
-
+from math import floor
 from skrobot.coordinates.math import normalize_vector
 from skrobot.coordinates.similarity_transform import \
     SimilarityTransformCoordinates
@@ -34,8 +34,15 @@ class UnionSDF(object):
         threshold_list = [sdf.surface_threshold for sdf in self.sdf_list]
         return max(threshold_list)
 
-    def surface_points(self):
-        points = np.vstack([sdf.surface_points()[0] for sdf in self.sdf_list])
+    def surface_points(self, n_sample=1000):
+        # equaly asign sample number to each sdf.surface_points()
+        n_list = len(self.sdf_list)
+        n_sample_each = floor(n_sample/n_list)
+        n_sample_last = n_sample - n_sample_each * (n_list - 1)
+        num_list = [n_sample_each]*(n_list - 1) + [n_sample_last]
+
+        points = np.vstack([sdf.surface_points(n_sample=n_sample_)[0] 
+            for sdf, n_sample_ in zip(self.sdf_list, num_list)])
         logicals, sd_vals = self.on_surface(points)
         #import IPython; IPython.embed()
         return points[logicals], sd_vals[logicals]
@@ -80,8 +87,8 @@ class SignedDistanceFunction(SimilarityTransformCoordinates):
         logicals = np.abs(sd_vals) < self.surface_threshold
         return logicals, sd_vals
 
-    def surface_points(self, **kwargs):
-        points_, dists = self._surface_points(**kwargs)
+    def surface_points(self, n_sample=1000):
+        points_, dists = self._surface_points(n_sample=n_sample)
         points = self.transform_pts_sdf_to_obj(points_)
         return points, dists
 
@@ -205,18 +212,18 @@ class BoxSDF(SignedDistanceFunction):
         sd = left + right
         return sd
 
-    def _surface_points(self, N=1000):
+    def _surface_points(self, n_sample=1000):
         # surface points by raymarching
-        vecs = np.random.randn(N, 3)
+        vecs = np.random.randn(n_sample, 3)
         norms = np.linalg.norm(vecs, axis=1).reshape(-1, 1)
         unit_vecs = vecs / np.repeat(norms, 3, axis=1)
 
         # start ray marching
         ray_directions = unit_vecs
-        ray_tips = np.zeros((N, 3))
+        ray_tips = np.zeros((n_sample, 3))
         self._signed_distance(ray_tips)
         while True:
-            sd = self._signed_distance(ray_tips).reshape(N, -1)
+            sd = self._signed_distance(ray_tips).reshape(n_sample, -1)
             ray_tips += ray_directions * np.repeat(sd, 3, axis=1)
             if np.all(np.abs(sd) < self._surface_threshold):
                 break
@@ -514,7 +521,7 @@ class GridSDF(SignedDistanceFunction):
         else:
             raise ValueError
 
-    def _surface_points(self):
+    def _surface_points(self, n_sample=None):
         """Returns the points on the surface.
 
         Parameters
@@ -537,6 +544,13 @@ class GridSDF(SignedDistanceFunction):
         surface_values = self.data[surface_points[:, 0],
                                    surface_points[:, 1],
                                    surface_points[:, 2]]
+        if n_sample is not None:
+            # somple points WITHOUT duplication
+            n_pts = len(surface_points)
+            n_sample = min(n_sample, n_pts)
+            idxes = np.random.permutation(n_pts)[:n_sample]
+            surface_points, surface_values = surface_points[idxes], surface_values[idxes]
+
         return surface_points, surface_values
 
     @staticmethod
