@@ -1,5 +1,5 @@
 from numbers import Number
-
+import os
 import numpy as np
 import pysdfgen
 from math import floor
@@ -608,5 +608,10 @@ class GridSDF(SignedDistanceFunction):
         sdf_instance : skrobot.exchange.sdf.GridSDF
             instance of sdf
         """
-        sdf_filepath = pysdfgen.obj2sdf(str(obj_filepath), dim, padding)
-        return GridSDF.from_file(sdf_filepath)
+        filename, extension = os.path.splitext(str(obj_filepath))
+        sdf_cache_path = filename + ".sdf"
+        if not os.path.exists(sdf_cache_path):
+            print('pre-computing sdf and making a cache at {0}.'.format(sdf_cache_path))
+            pysdfgen.obj2sdf(str(obj_filepath), dim, padding)
+            print("finish pre-computation")
+        return GridSDF.from_file(sdf_cache_path)
