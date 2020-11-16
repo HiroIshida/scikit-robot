@@ -3,6 +3,22 @@ from skrobot.coordinates.math import rpy_matrix, rpy_angle
 import scipy
 import numpy as np
 import copy
+from cachetools.func import lru_cache
+
+def util_fksolver_get_linkids(fksolver, link_list):
+    # add-hoc work around; recursively find existing link
+    def get_link_id(link):
+        try:
+            link_id = fksolver.get_link_ids([link.name])[0]
+            return link_id
+        except:
+            return get_link_id(link.parent)
+    return [get_link_id(link) for link in link_list]
+
+def util_fksolver_get_jointids(fksolver, joint_list):
+    joint_names = [joint.name for joint in joint_list]
+    joint_ids = fksolver.get_joint_ids(joint_names)
+    return joint_ids
 
 def util_set_robot_state(robot_model, joint_list, av, base_also=False):
     if base_also:
@@ -87,6 +103,7 @@ def plan_trajectory(self,
                     move_target,
                     coll_cascaded_coords_list,
                     signed_distance_function,
+                    use_cpp=True,
                     rot_also=True,
                     base_also=False,
                     weights=None,
@@ -156,16 +173,29 @@ def plan_trajectory(self,
         initial_trajectory = np.array(
             [av_init + i * regular_interval for i in range(n_wp)])
 
-    def collision_fk(av_seq):
-        points, jacobs = [], []
-        for av in av_seq:
-            for collision_coords in coll_cascaded_coords_list:
-                rot_also = False # rotation is nothing to do with point collision
-                p, J = util_forward_kinematics(self, link_list, av, collision_coords, 
-                        rot_also=rot_also, base_also=base_also) 
-                points.append(p)
-                jacobs.append(J)
-        return np.vstack(points), np.vstack(jacobs)
+    if use_cpp:
+        fksolver = self.fksolver 
+        fks_joint_ids = util_fksolver_get_jointids(fksolver, joint_list)
+        fks_collisionlink_ids = util_fksolver_get_linkids(fksolver, coll_cascaded_coords_list)
+        def collision_fk(av_seq):
+            rot_also = False
+            J, P = self.fksolver.compute_trajectory_jacobians(
+                    av_seq, 
+                    fks_collisionlink_ids,
+                    fks_joint_ids,
+                    rot_also, 
+                    base_also)
+            return P, J
+    else:
+        def collision_fk(av_seq):
+            points, jacobs = [], []
+            for av in av_seq:
+                for collision_coords in coll_cascaded_coords_list:
+                    rot_also = False # rotation is nothing to do with point collision
+                    p, J = util_forward_kinematics(self, link_list, av, collision_coords, 
+                            rot_also=rot_also, base_also=base_also) 
+                    points.append(p); jacobs.append(J)
+            return np.vstack(points), np.vstack(jacobs)
 
     n_features = len(coll_cascaded_coords_list)
     opt = GradBasedPlannerCommon(initial_trajectory,

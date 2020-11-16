@@ -1,5 +1,5 @@
 from ..model import RobotModel
-
+import pyrobotfk
 
 class RobotModelFromURDF(RobotModel):
 
@@ -16,6 +16,7 @@ class RobotModelFromURDF(RobotModel):
             self.load_urdf_file(file_obj=urdf_file)
         else:
             self.load_urdf_file(file_obj=self.default_urdf_path)
+        self.fksolver = pyrobotfk.RoboticTree(self.urdf_path)
 
     @property
     def default_urdf_path(self):
