@@ -6,6 +6,7 @@ import pysdfgen
 from skrobot.coordinates.math import normalize_vector
 from skrobot.coordinates.similarity_transform import \
     SimilarityTransformCoordinates
+from scipy.interpolate import RegularGridInterpolator
 
 class UnionSDF(object):
     """UinonSDF is Not a child of CascadedCoords
@@ -126,7 +127,6 @@ class SignedDistanceFunction(SimilarityTransformCoordinates):
             points_sdf = np.dot(points_obj.T, self.copy_worldcoords().transform(
                 self.sdf_to_obj_transform).worldrot().T)
         else:
-            print(points_obj)
             points_sdf = self.copy_worldcoords().transform(
                 self.sdf_to_obj_transform).inverse_transform_vector(points_obj)
         return points_sdf
@@ -224,17 +224,16 @@ class GridSDF(SignedDistanceFunction):
                  use_abs=True,
                  *args, **kwargs):
         super(GridSDF, self).__init__(origin, resolution, *args, **kwargs)
-        self.num_interpolants = 8
-        self.min_point_x = [0, 2, 3, 5]
-        self.max_point_x = [1, 4, 6, 7]
-        self.min_point_y = [0, 1, 3, 6]
-        self.max_point_y = [2, 4, 5, 7]
-        self.min_point_z = [0, 1, 2, 4]
-        self.max_point_z = [3, 5, 6, 7]
-
         self._data = sdf_data
         self._dims = self.data.shape
         self.resolution = resolution
+
+        # create regular grid interpolator
+        xlin, ylin, zlin = [range(d) for d in self.data.shape]
+        self.itp = RegularGridInterpolator(
+                (xlin, ylin, zlin), 
+                sdf_data,
+                fill_value=np.inf)
 
         spts, _ = self.surface_points()
         self._center = 0.5 * (np.min(spts, axis=0) + np.max(spts, axis=0))
@@ -242,9 +241,6 @@ class GridSDF(SignedDistanceFunction):
         self.sdf_to_obj_transform = SimilarityTransformCoordinates(
             pos=self.origin,
             scale=self.resolution)
-
-        # buffer
-        self._points_buf = np.zeros([self.num_interpolants, 3], dtype=np.int)
 
         # optionally use only the absolute values
         # (useful for non-closed meshes in 3D)
@@ -340,114 +336,17 @@ class GridSDF(SignedDistanceFunction):
     def _signed_distance(self, points_sdf):
         """Returns the signed distance at the given coordinates
 
-        Interpolating if necessary.
-
         Parameters
         ----------
-        points_sdf : numpy.ndarray
-            A 3-dimensional ndarray that indicates the desired
-            coordinates in the grid.
+        points_sdf : numpy.ndarray (Nx3) in sdf basis
 
         Returns
         -------
-        float or numpy.ndarray
-            The signed distance at the given points (interpolated).
+        numpy.ndarray
         """
         points_sdf = np.array(points_sdf)
-        if points_sdf.ndim == 1:
-            if len(points_sdf) != 3:
-                raise IndexError('Indexing must be 3 dimensional')
-            if self.is_out_of_bounds(points_sdf):
-                # logging.debug('Out of bounds access. Snapping to GridSDF dims')
-                pass
-
-            # snap to grid dims
-            point_buf = np.zeros(3)
-            point_buf[0] = max(0, min(points_sdf[0], self.dimensions[0] - 1))
-            point_buf[1] = max(0, min(points_sdf[1], self.dimensions[1] - 1))
-            point_buf[2] = max(0, min(points_sdf[2], self.dimensions[2] - 1))
-
-            # regular indexing if integers
-            if type(points_sdf[0]) is int and \
-                    type(points_sdf[1]) is int and \
-                    type(points_sdf[2]) is int:
-                point_buf = point_buf.astype(np.int)
-                return self.data[point_buf[0], point_buf[1], point_buf[2]]
-
-            # otherwise interpolate
-            min_point = np.floor(point_buf)
-            max_point = min_point + 1  # assumed to be on grid
-            self._points_buf[self.min_point_x, 0] = min_point[0]
-            self._points_buf[self.max_point_x, 0] = max_point[0]
-            self._points_buf[self.min_point_y, 1] = min_point[1]
-            self._points_buf[self.max_point_y, 1] = max_point[1]
-            self._points_buf[self.min_point_z, 2] = min_point[2]
-            self._points_buf[self.max_point_z, 2] = max_point[2]
-
-            # bilinearly interpolate points
-            sd = 0.0
-            for i in range(self.num_interpolants):
-                p = self._points_buf[i, :]
-                if self.is_out_of_bounds(p):
-                    v = 0.0
-                else:
-                    v = self.data[p[0], p[1], p[2]]
-                w = np.prod(-np.abs(p - point_buf) + 1)
-                sd = sd + w * v
-
-            return sd
-        elif points_sdf.ndim == 2:
-            # for batch input
-            point_buf = np.maximum(
-                0, np.minimum(points_sdf, np.array(self.dimensions) - 1))
-            sd = np.zeros(len(points_sdf), dtype=np.float64)
-            no_interpolating = (
-                point_buf == np.array(point_buf, dtype=np.int32)).all(axis=1)
-            no_interpolating_point = np.array(
-                point_buf[no_interpolating], dtype=np.int32)
-            if len(no_interpolating_point) > 0:
-                sd[no_interpolating] = self.data[
-                    no_interpolating_point[:, 0],
-                    no_interpolating_point[:, 1],
-                    no_interpolating_point[:, 2],
-                ]
-
-            interpolating_point = point_buf[np.logical_not(no_interpolating)]
-            if len(interpolating_point) == 0:
-                return sd
-
-            min_point = np.floor(interpolating_point)
-            max_point = min_point + 1  # assumed to be on grid
-
-            n = len(interpolating_point)
-            points_buf = np.zeros([n, self.num_interpolants, 3], dtype=np.int)
-            points_buf[:, self.min_point_x, 0] = np.repeat(
-                min_point[:, 0][None, ], 4, axis=0).T
-            points_buf[:, self.max_point_x, 0] = np.repeat(
-                max_point[:, 0][None, ], 4, axis=0).T
-            points_buf[:, self.min_point_y, 1] = np.repeat(
-                min_point[:, 1][None, ], 4, axis=0).T
-            points_buf[:, self.max_point_y, 1] = np.repeat(
-                max_point[:, 1][None, ], 4, axis=0).T
-            points_buf[:, self.min_point_z, 2] = np.repeat(
-                min_point[:, 2][None, ], 4, axis=0).T
-            points_buf[:, self.max_point_z, 2] = np.repeat(
-                max_point[:, 2][None, ], 4, axis=0).T
-
-            # bilinearly interpolate points
-            interpolating_sd = sd[np.logical_not(no_interpolating)]
-            for i in range(self.num_interpolants):
-                p = points_buf[:, i, :]
-                valid = np.logical_not(self.is_out_of_bounds(p))
-                p = p[valid]
-                v = self.data[p[:, 0], p[:, 1], p[:, 2]]
-                w = np.prod(-np.abs(p - interpolating_point[valid]) + 1,
-                            axis=1)
-                interpolating_sd[valid] = interpolating_sd[valid] + w * v
-            sd[np.logical_not(no_interpolating)] = interpolating_sd
-            return sd
-        else:
-            raise ValueError
+        sd_vals = self.itp(points_sdf)
+        return sd_vals
 
     def __getitem__(self, points_sdf):
         """Returns the signed distance at the given coordinates.
