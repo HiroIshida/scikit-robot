@@ -174,6 +174,11 @@ def plan_trajectory(self,
             [av_init + i * regular_interval for i in range(n_wp)])
 
     if use_cpp:
+        raise Exception("you must set the initial WHOLE angle vector beforehand. \
+                e.g. even if you do not use torso in planning, you must set it . \ 
+                to reflect the skrobot's joint angles to the tinyfk")
+
+
         fksolver = self.fksolver 
         fks_joint_ids = util_fksolver_get_jointids(fksolver, joint_list)
         fks_collisionlink_ids = util_fksolver_get_linkids(fksolver, coll_cascaded_coords_list)
