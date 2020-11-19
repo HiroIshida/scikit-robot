@@ -6,12 +6,10 @@ import time
 from skrobot.utils import sdf_box
 
 if __name__ == '__main__':
+    debug = True
     robot_model = skrobot.models.urdf.RobotModelFromURDF(
         urdf_file=skrobot.data.pr2_urdfpath())
     robot_model.init_pose()
-    viewer = skrobot.viewers.TrimeshSceneViewer(resolution=(640, 480))
-    viewer.add(robot_model)
-    viewer.show()
 
     link_idx_table = {}
     for link_idx in range(len(robot_model.link_list)):
@@ -47,7 +45,12 @@ if __name__ == '__main__':
         extents=box_width, face_colors=(1., 0, 0)
     )
     box.translate(box_center)
-    viewer.add(box)
+
+    if debug:
+        viewer = skrobot.viewers.TrimeshSceneViewer(resolution=(640, 480))
+        viewer.add(robot_model)
+        viewer.show()
+        viewer.add(box)
     margin = 0.1
 
     def sdf(X):
@@ -57,9 +60,10 @@ if __name__ == '__main__':
         target_coords, 10, link_list, rarm_end_coords,
         [rarm_end_coords, forarm_coords], sdf)
 
-    time.sleep(1.0)
-    print("show trajectory")
-    for av in traj:
-        set_joint_angles(av)
-        viewer.redraw()
+    if debug:
         time.sleep(1.0)
+        print("show trajectory")
+        for av in traj:
+            set_joint_angles(av)
+            viewer.redraw()
+            time.sleep(1.0)

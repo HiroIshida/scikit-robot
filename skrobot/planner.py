@@ -174,9 +174,11 @@ def plan_trajectory(self,
             [av_init + i * regular_interval for i in range(n_wp)])
 
     if use_cpp:
+        """
         raise Exception("you must set the initial WHOLE angle vector beforehand. \
                 e.g. even if you do not use torso in planning, you must set it . \ 
                 to reflect the skrobot's joint angles to the tinyfk")
+        """
 
 
         fksolver = self.fksolver 
@@ -184,7 +186,7 @@ def plan_trajectory(self,
         fks_collisionlink_ids = util_fksolver_get_linkids(fksolver, coll_cascaded_coords_list)
         def collision_fk(av_seq):
             rot_also = False
-            J, P = self.fksolver.compute_trajectory_jacobians(
+            P, J = self.fksolver.solve_forward_kinematics(
                     av_seq, 
                     fks_collisionlink_ids,
                     fks_joint_ids,
@@ -210,7 +212,10 @@ def plan_trajectory(self,
                                  signed_distance_function,
                                  weights=weights,
                                  )
+    import time
+    ts = time.time()
     optimal_trajectory = opt.solve()
+    print("solving time is {0} sec".format(time.time() -ts))
     return optimal_trajectory
 
 def construct_smoothcost_fullmat(n_dof, n_wp, weights=None):
