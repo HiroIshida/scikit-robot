@@ -1,5 +1,8 @@
 from ..model import RobotModel
-
+try:
+    import tinyfk
+except:
+    import _tinyfk as tinyfk # if installed not through PIP
 
 class RobotModelFromURDF(RobotModel):
 
@@ -16,6 +19,7 @@ class RobotModelFromURDF(RobotModel):
             self.load_urdf_file(file_obj=urdf_file)
         else:
             self.load_urdf_file(file_obj=self.default_urdf_path)
+        self.fksolver = tinyfk.RobotModel(self.urdf_path)
 
     @property
     def default_urdf_path(self):

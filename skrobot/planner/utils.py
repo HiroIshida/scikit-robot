@@ -4,6 +4,22 @@ import copy
 from skrobot.coordinates import CascadedCoords, Coordinates
 from skrobot.coordinates.math import rpy_matrix, rpy_angle
 
+def tinyfk_get_linkids(fksolver, link_list):
+    # TODO
+    # add-hoc work around; recursively find existing link
+    def get_link_id(link):
+        try:
+            link_id = fksolver.get_link_ids([link.name])[0]
+            return link_id
+        except:
+            return get_link_id(link.parent)
+    return [get_link_id(link) for link in link_list]
+
+def tinyfk_get_jointids(fksolver, joint_list):
+    joint_names = [joint.name for joint in joint_list]
+    joint_ids = fksolver.get_joint_ids(joint_names)
+    return joint_ids
+
 def set_robot_state(robot_model, joint_list, av, base_also=False):
     if base_also:
         av_joint, av_base = av[:-3], av[-3:] 

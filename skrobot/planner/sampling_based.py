@@ -1,3 +1,4 @@
+import time 
 import numpy as np
 from . import utils
 import matplotlib.pyplot as plt
@@ -9,7 +10,8 @@ def plan_trajectory_rrt(self,
         coll_cascaded_coords_list,
         signed_distance_function,
         base_also=False,
-        debug_plot=False
+        debug_plot=False,
+        use_cpp=True
         ):
     joint_list = [link.joint for link in link_list]
     joint_mins = [max(j.min_angle, -3.14) for j in joint_list] # TODO tmp
@@ -19,19 +21,39 @@ def plan_trajectory_rrt(self,
         joint_maxs += [0.5]*3 # TODO tmp
     cspace = ConfigurationSpace(joint_mins, joint_maxs)
 
-    def isValidConfiguration(av):
-        rot_also = False # rotation is nothing to do with point collision
-        point_list = []
-        for collision_coords in coll_cascaded_coords_list:
-            p = utils.forward_kinematics(self, link_list, av, collision_coords, 
-                    rot_also=rot_also, base_also=base_also, with_jacobian=False) 
-            point_list.append(p)
-        sd_vals = signed_distance_function(np.vstack(point_list))
-        return np.all(sd_vals > 0.0)
+    # create isValidConfiguration function
+    rot_also = False # rotation is nothing to do with point collision
+    if use_cpp:
+        fksolver = self.fksolver 
+        fks_joint_ids = utils.tinyfk_get_jointids(fksolver, joint_list)
+        fks_collisionlink_ids = utils.tinyfk_get_linkids(fksolver, coll_cascaded_coords_list)
+        def isValidConfiguration(av):
+            av_traj = av.reshape(1, -1)
+            with_jacobian = False
+            P, _ = self.fksolver.solve_forward_kinematics(
+                    av_traj,
+                    fks_collisionlink_ids,
+                    fks_joint_ids,
+                    rot_also, 
+                    base_also,
+                    with_jacobian)
+            sd_vals = signed_distance_function(P)
+            return np.all(sd_vals > 0.0)
+    else:
+        def isValidConfiguration(av):
+            point_list = []
+            for collision_coords in coll_cascaded_coords_list:
+                p = utils.forward_kinematics(self, link_list, av, collision_coords, 
+                        rot_also=rot_also, base_also=base_also, with_jacobian=False) 
+                point_list.append(p)
+            sd_vals = signed_distance_function(np.vstack(point_list))
+            return np.all(sd_vals > 0.0)
 
     brrt = BidirectionalRRT(cspace, av_init, av_goal, 
             pred_valid_config=isValidConfiguration)
+    ts = time.time()
     av_seq = brrt.solve()
+    print("solving time : {0}".format(time.time() - ts))
 
     if debug_plot:
         fig, ax = brrt.show()

@@ -1,3 +1,4 @@
+import time
 import scipy
 import copy
 import numpy as np
@@ -12,7 +13,9 @@ def plan_trajectory(self,
                     n_wp,
                     base_also=False,
                     weights=None,
-                    initial_trajectory=None):
+                    initial_trajectory=None,
+                    use_cpp=True
+                    ):
     """Gradient based trajectory optimization using scipy's SLSQP. 
     Collision constraint is considered in an inequality constraits. 
     Terminal constraint (start and end) is considered as an 
@@ -59,16 +62,33 @@ def plan_trajectory(self,
         initial_trajectory = np.array(
             [av_start + i * regular_interval for i in range(n_wp)])
 
-    def collision_fk(av_seq):
-        points, jacobs = [], []
-        for av in av_seq:
-            for collision_coords in coll_cascaded_coords_list:
-                rot_also = False # rotation is nothing to do with point collision
-                p, J = utils.forward_kinematics(self, link_list, av, collision_coords, 
-                        rot_also=rot_also, base_also=base_also) 
-                points.append(p)
-                jacobs.append(J)
-        return np.vstack(points), np.vstack(jacobs)
+
+    if use_cpp:
+        fksolver = self.fksolver 
+        fks_joint_ids = utils.tinyfk_get_jointids(fksolver, joint_list)
+        fks_collisionlink_ids = utils.tinyfk_get_linkids(fksolver, coll_cascaded_coords_list)
+        def collision_fk(av_seq):
+            rot_also = False
+            with_jacobian = True
+            P, J = self.fksolver.solve_forward_kinematics(
+                    av_seq, 
+                    fks_collisionlink_ids,
+                    fks_joint_ids,
+                    rot_also, 
+                    base_also,
+                    with_jacobian)
+            return P, J
+    else:
+        def collision_fk(av_seq):
+            points, jacobs = [], []
+            for av in av_seq:
+                for collision_coords in coll_cascaded_coords_list:
+                    rot_also = False # rotation is nothing to do with point collision
+                    p, J = utils.forward_kinematics(self, link_list, av, collision_coords, 
+                            rot_also=rot_also, base_also=base_also) 
+                    points.append(p)
+                    jacobs.append(J)
+            return np.vstack(points), np.vstack(jacobs)
 
     def collision_ineq_fun(av_trajectory):
         return utils.sdf_collision_inequality_function(
@@ -79,7 +99,9 @@ def plan_trajectory(self,
                                  joint_limits,
                                  weights=weights,
                                  )
+    ts = time.time()
     optimal_trajectory = opt.solve()
+    print("solving time : {0}".format(time.time() - ts))
     return optimal_trajectory
 
 def construct_smoothcost_fullmat(n_dof, n_wp, weights=None):
