@@ -24,6 +24,8 @@ def plan_trajectory_rrt(self,
     # create isValidConfiguration function
     rot_also = False # rotation is nothing to do with point collision
     if use_cpp:
+        utils.tinyfk_copy_current_state(self)
+
         fksolver = self.fksolver 
         fks_joint_ids = utils.tinyfk_get_jointids(fksolver, joint_list)
         fks_collisionlink_ids = utils.tinyfk_get_linkids(fksolver, coll_cascaded_coords_list)
