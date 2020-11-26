@@ -1,4 +1,5 @@
 from numbers import Number
+from logging import getLogger
 import os
 import numpy as np
 import pysdfgen
@@ -7,6 +8,8 @@ from skrobot.coordinates.math import normalize_vector
 from skrobot.coordinates.similarity_transform import \
     SimilarityTransformCoordinates
 from scipy.interpolate import RegularGridInterpolator
+
+logger = getLogger(__name__)
 
 class UnionSDF(object):
     """UinonSDF is Not a child of CascadedCoords
@@ -611,7 +614,7 @@ class GridSDF(SignedDistanceFunction):
         filename, extension = os.path.splitext(str(obj_filepath))
         sdf_cache_path = filename + ".sdf"
         if not os.path.exists(sdf_cache_path):
-            print('pre-computing sdf and making a cache at {0}.'.format(sdf_cache_path))
+            logger.info('pre-computing sdf and making a cache at {0}.'.format(sdf_cache_path))
             pysdfgen.obj2sdf(str(obj_filepath), dim, padding)
-            print("finish pre-computation")
+            logger.info('finish pre-computation')
         return GridSDF.from_file(sdf_cache_path)

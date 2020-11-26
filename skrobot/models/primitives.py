@@ -45,7 +45,7 @@ class Axis(model_module.Link):
 class Box(model_module.Link):
 
     def __init__(self, extents, vertex_colors=None, face_colors=None,
-                 pos=(0, 0, 0), rot=np.eye(3), name=None, withsdf=False):
+                 pos=(0, 0, 0), rot=np.eye(3), name=None, with_sdf=False):
         if name is None:
             name = 'box_{}'.format(str(uuid.uuid1()).replace('-', '_'))
 
@@ -57,7 +57,7 @@ class Box(model_module.Link):
             face_colors=face_colors,
         )
 
-        if withsdf:
+        if with_sdf:
             sdf = BoxSDF(np.zeros(3), extents)
             self.assoc(sdf)
             self.sdf = sdf
@@ -160,15 +160,15 @@ class MeshLink(model_module.Link):
 
     def __init__(self,
                  visual_mesh=None,
-                 pos=(0, 0, 0), rot=np.eye(3), name=None, withsdf=False):
+                 pos=(0, 0, 0), rot=np.eye(3), name=None, with_sdf=False):
         if name is None:
             name = 'meshlink_{}'.format(str(uuid.uuid1()).replace('-', '_'))
 
         super(MeshLink, self).__init__(pos=pos, rot=rot, name=name)
         self.visual_mesh = visual_mesh
 
-        if withsdf:
-            assert os.path.isfile(visual_mesh), "withsdf is valid only with a mesh file" 
+        if with_sdf:
+            assert os.path.isfile(visual_mesh), "with_sdf is valid only with a mesh file" 
             sdf = GridSDF.from_objfile(visual_mesh)
             self.assoc(sdf)
             self.sdf = sdf
