@@ -1,5 +1,6 @@
 from numbers import Number
 from logging import getLogger
+import hashlib
 import os
 import numpy as np
 import pysdfgen
@@ -611,10 +612,17 @@ class GridSDF(SignedDistanceFunction):
         sdf_instance : skrobot.exchange.sdf.GridSDF
             instance of sdf
         """
+
+        sdf_cache_dir = os.path.expanduser("~") + "/.skrobot/sdf/"
+        if not os.path.exists(sdf_cache_dir):
+            os.makedirs(sdf_cache_dir)
+
         filename, extension = os.path.splitext(str(obj_filepath))
-        sdf_cache_path = filename + ".sdf"
+        hashed_filename = hashlib.md5(filename.encode()).hexdigest()
+
+        sdf_cache_path = sdf_cache_dir + hashed_filename + ".sdf"
         if not os.path.exists(sdf_cache_path):
             logger.info('pre-computing sdf and making a cache at {0}.'.format(sdf_cache_path))
-            pysdfgen.obj2sdf(str(obj_filepath), dim, padding)
+            pysdfgen.obj2sdf(str(obj_filepath), dim, padding, output_filepath=sdf_cache_path)
             logger.info('finish pre-computation')
         return GridSDF.from_file(sdf_cache_path)
