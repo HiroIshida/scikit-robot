@@ -3,6 +3,7 @@ import scipy
 import copy
 import numpy as np
 from . import utils
+from .swept_sphere import assoc_swept_sphere
 
 def plan_trajectory(self,
                     av_start,
@@ -54,7 +55,6 @@ def plan_trajectory(self,
     if base_also:
         joint_limits += [[-np.inf, np.inf]]*3
 
-    n_feature = len(coll_cascaded_coords_list)
 
     # create initial solution for the optimization problem
     if initial_trajectory is None:
@@ -62,18 +62,21 @@ def plan_trajectory(self,
         initial_trajectory = np.array(
             [av_start + i * regular_interval for i in range(n_wp)])
 
+    coll_sphere_list = sum([assoc_swept_sphere(self, l) for l in coll_cascaded_coords_list], [])
+    n_feature = len(coll_sphere_list)
 
     if use_cpp:
         utils.tinyfk_copy_current_state(self)
         fksolver = self.fksolver 
         fks_joint_ids = utils.tinyfk_get_jointids(fksolver, joint_list)
-        fks_collisionlink_ids = utils.tinyfk_get_linkids(fksolver, coll_cascaded_coords_list)
+
+        fks_coll_link_ids = utils.tinyfk_get_linkids(fksolver, coll_sphere_list)
         def collision_fk(av_seq):
             rot_also = False
             with_jacobian = True
             P, J = self.fksolver.solve_forward_kinematics(
                     av_seq, 
-                    fks_collisionlink_ids,
+                    fks_coll_link_ids,
                     fks_joint_ids,
                     rot_also, 
                     base_also,
@@ -83,7 +86,7 @@ def plan_trajectory(self,
         def collision_fk(av_seq):
             points, jacobs = [], []
             for av in av_seq:
-                for collision_coords in coll_cascaded_coords_list:
+                for collision_coords in coll_sphere_list:
                     rot_also = False # rotation is nothing to do with point collision
                     p, J = utils.forward_kinematics(self, link_list, av, collision_coords, 
                             rot_also=rot_also, base_also=base_also) 
