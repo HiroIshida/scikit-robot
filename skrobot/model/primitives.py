@@ -8,6 +8,8 @@ from .link import Link
 from skrobot.coordinates import Coordinates
 from skrobot.coordinates import CascadedCoords
 
+from skrobot.sdf import BoxSDF
+from skrobot.sdf import GridSDF
 
 class Axis(Link):
 
