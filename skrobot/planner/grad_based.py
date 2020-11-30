@@ -62,7 +62,12 @@ def plan_trajectory(self,
         initial_trajectory = np.array(
             [av_start + i * regular_interval for i in range(n_wp)])
 
-    coll_sphere_list = sum([assoc_swept_sphere(self, l) for l in coll_cascaded_coords_list], [])
+    coll_sphere_list_tuple, feature_radius_list_tuple = \
+            zip(*[assoc_swept_sphere(self, link) for link in coll_cascaded_coords_list])
+    coll_sphere_list = sum(coll_sphere_list_tuple, [])
+
+    feature_radius_arr = np.array(sum(feature_radius_list_tuple, []))
+    feature_radius_traj = np.repeat(feature_radius_arr, n_wp)
     n_feature = len(coll_sphere_list)
 
     if use_cpp:
@@ -96,7 +101,8 @@ def plan_trajectory(self,
 
     def collision_ineq_fun(av_trajectory):
         return utils.sdf_collision_inequality_function(
-                av_trajectory, collision_fk, signed_distance_function, n_feature)
+                av_trajectory, collision_fk, signed_distance_function, n_feature, feature_radius_traj)
+                #av_trajectory, collision_fk, signed_distance_function, n_feature, None)
 
     opt = GradBasedPlannerCommon(initial_trajectory,
                                  collision_ineq_fun,

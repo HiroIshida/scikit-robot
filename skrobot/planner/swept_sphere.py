@@ -18,7 +18,9 @@ def assoc_swept_sphere(robot_model, link):
         sp = Sphere(radius=R, pos = co_s.worldpos())
         link.assoc(sp)
         spheres.append(sp)
-    return spheres
+    feature_radius_list = [R] * len(spheres)
+
+    return spheres, feature_radius_list
 
 def compute_swept_sphere(visual_mesh, 
         n_sphere=-1, 

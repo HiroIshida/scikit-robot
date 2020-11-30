@@ -113,10 +113,11 @@ def forward_kinematics(robot_model, link_list, av, move_target, rot_also, base_a
     else:
         return pose
 
-def sdf_collision_inequality_function(av_seq, collision_fk, sdf, n_feature):
+def sdf_collision_inequality_function(av_seq, collision_fk, sdf, n_feature, feature_radius_traj=None):
     n_wp, n_dof = av_seq.shape
     P_link, J_link = collision_fk(av_seq)
     sdf_grads = np.zeros(P_link.shape)
+
     F_link_cost0 = sdf(np.array(P_link))
     eps = 1e-7
     for i in range(3):
@@ -131,8 +132,13 @@ def sdf_collision_inequality_function(av_seq, collision_fk, sdf, n_feature):
     J_link_block = J_link_list.reshape(
         n_wp, n_feature, n_dof)
     J_link_full = scipy.linalg.block_diag(*list(J_link_block))
-    F_cost_full, J_cost_full = F_link_cost0, J_link_full
-    return F_cost_full, J_cost_full
+
+    if feature_radius_traj is None: # point and sdf collision checking
+        F_link_cost = F_link_cost0
+    else: # sphere and sdf collision checking
+        F_link_cost = F_link_cost0 - feature_radius_traj
+
+    return F_link_cost, J_link_full
 
 def scipinize(fun):
     closure_member = {'jac_cache': None}
