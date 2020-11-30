@@ -1942,6 +1942,10 @@ class RobotModel(CascadedLink):
             coords.worldpos(),
             self.head.link_list)
 
+    from skrobot.planner import plan_trajectory
+    from skrobot.planner import inverse_kinematics_slsqp
+    from skrobot.planner import plan_trajectory_rrt
+
 
 def calc_joint_angle_min_max_for_limit_calculation(j, kk, jamm=None):
     if jamm is None:
