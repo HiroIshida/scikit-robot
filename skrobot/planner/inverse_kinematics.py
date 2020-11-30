@@ -1,6 +1,7 @@
 import numpy as np
 import scipy
 from . import utils
+from .swept_sphere import assoc_swept_sphere
 
 def inverse_kinematics_slsqp(self, 
                              target_coords,
@@ -25,10 +26,16 @@ def inverse_kinematics_slsqp(self,
 
     n_feature = len(coll_cascaded_coords_list)
     if n_feature > 0 and signed_distance_function is not None:
+
+        coll_sphere_list_tuple, feature_radius_list_tuple = \
+                zip(*[assoc_swept_sphere(self, link) for link in coll_cascaded_coords_list])
+        coll_sphere_list = sum(coll_sphere_list_tuple, [])
+        feature_radius_arr = np.array(sum(feature_radius_list_tuple, []))
+
         def collision_fk(av_seq):
             points, jacobs = [], [] # TODO duplicate
             for av in av_seq:
-                for collision_coords in coll_cascaded_coords_list:
+                for collision_coords in coll_sphere_list:
                     rot_also = False # rotation is nothing to do with point collision
                     p, J = utils.forward_kinematics(self, link_list, av, collision_coords, 
                             rot_also=rot_also, base_also=base_also) 
@@ -39,7 +46,7 @@ def inverse_kinematics_slsqp(self,
         def collision_ineq_fun(av):
             av_trajectory = av.reshape(1, -1) 
             return utils.sdf_collision_inequality_function(
-                    av_trajectory, collision_fk, signed_distance_function, n_feature)
+                    av_trajectory, collision_fk, signed_distance_function, n_feature, feature_radius_arr)
     else:
         collision_ineq_fun = None
 
