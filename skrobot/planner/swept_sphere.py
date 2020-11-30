@@ -1,6 +1,6 @@
 import numpy as np
 from sklearn.covariance import EmpiricalCovariance
-from skrobot.model import Sphere
+from skrobot.model.primitives import Sphere
 from skrobot.coordinates import CascadedCoords
 import trimesh
 
