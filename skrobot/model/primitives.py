@@ -3,12 +3,13 @@ import uuid
 import os
 import numpy as np
 import trimesh
+from .link import Link
 
-from skrobot import model as model_module
-from skrobot.sdf import BoxSDF
-from skrobot.sdf import GridSDF
+from skrobot.coordinates import Coordinates
+from skrobot.coordinates import CascadedCoords
 
-class Axis(model_module.Link):
+
+class Axis(Link):
 
     def __init__(self,
                  axis_radius=0.01,
@@ -26,14 +27,14 @@ class Axis(model_module.Link):
 
     @classmethod
     def from_coords(cls, coords, **kwargs):
-        assert isinstance(coords, model_module.Coordinates)
+        assert isinstance(coords, Coordinates)
         link = cls(**kwargs)
         link.parent = coords
         return link
 
     @classmethod
     def from_cascoords(cls, cascoords, **kwargs):
-        assert isinstance(cascoords, model_module.CascadedCoords)
+        assert isinstance(cascoords, CascadedCoords)
         link = cls(**kwargs)
         link.parent = cascoords.worldcoords()
         for cc in cascoords.descendants:
@@ -42,7 +43,7 @@ class Axis(model_module.Link):
         return link
 
 
-class Box(model_module.Link):
+class Box(Link):
 
     def __init__(self, extents, vertex_colors=None, face_colors=None,
                  pos=(0, 0, 0), rot=np.eye(3), name=None, with_sdf=False):
@@ -64,7 +65,7 @@ class Box(model_module.Link):
         else:
             self.sdf = None
 
-class CameraMarker(model_module.Link):
+class CameraMarker(Link):
 
     def __init__(self, focal=None, fov=(70, 40), z_near=0.01, z_far=1000.0,
                  marker_height=0.4, pos=(0, 0, 0), rot=np.eye(3), name=None):
@@ -85,7 +86,7 @@ class CameraMarker(model_module.Link):
             marker_height=marker_height)
 
 
-class Cone(model_module.Link):
+class Cone(Link):
 
     def __init__(self, radius, height,
                  sections=32,
@@ -104,7 +105,7 @@ class Cone(model_module.Link):
         )
 
 
-class Cylinder(model_module.Link):
+class Cylinder(Link):
 
     def __init__(self, radius, height,
                  sections=32,
@@ -123,7 +124,7 @@ class Cylinder(model_module.Link):
         )
 
 
-class Sphere(model_module.Link):
+class Sphere(Link):
 
     def __init__(self, radius, subdivisions=3, color=None,
                  pos=(0, 0, 0), rot=np.eye(3), name=None):
@@ -138,7 +139,7 @@ class Sphere(model_module.Link):
         )
 
 
-class Annulus(model_module.Link):
+class Annulus(Link):
 
     def __init__(self, r_min, r_max, height,
                  vertex_colors=None, face_colors=None,
@@ -156,7 +157,7 @@ class Annulus(model_module.Link):
         )
 
 
-class MeshLink(model_module.Link):
+class MeshLink(Link):
 
     def __init__(self,
                  visual_mesh=None,
@@ -176,7 +177,7 @@ class MeshLink(model_module.Link):
             self.sdf = None
 
 
-class PointCloudLink(model_module.Link):
+class PointCloudLink(Link):
 
     def __init__(self,
                  visual_mesh=None,

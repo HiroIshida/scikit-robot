@@ -1,5 +1,6 @@
 import contextlib
 import copy
+import warnings
 
 import numpy as np
 
@@ -798,15 +799,39 @@ class Coordinates(object):
     def rotate(self, theta, axis=None, wrt='local'):
         """Rotate this coordinate by given theta and axis.
 
+        This coordinate system is rotated relative to theta radians
+        around the `axis` axis.
+        Note that this function does not change a position of this coordinate.
+        If you want to rotate this coordinates around with world frame,
+        you can use `transform` function.
+        Please see examples.
+
         Parameters
         ----------
         theta : float
-            radian
+            relartive rotation angle in radian.
+        axis : str or None or numpy.ndarray
+            axis of rotation.
+            The value of `axis` is represented as `wrt` frame.
         wrt : string or skrobot.coordinates.Coordinates
 
         Returns
         -------
         self : skrobot.coordinates.Coordinates
+
+        Examples
+        --------
+        >>> from skrobot.coordinates import Coordinates
+        >>> from numpy import pi
+        >>> c = Coordinates()
+        >>> c.translate((1.0, 0, 0))
+        >>> c.rotate(pi / 2.0, 'z', wrt='local')
+        >>> c.translation
+        array([1., 0., 0.])
+
+        >>> c.transform(Coordinates().rotate(np.pi / 2.0, 'z'), wrt='world')
+        >>> c.translation
+        array([0., 1., 0.])
         """
         if isinstance(axis, list) or isinstance(axis, np.ndarray):
             self.rotate_with_matrix(
@@ -966,13 +991,39 @@ class CascadedCoords(Coordinates):
     def descendants(self):
         return self._descendants
 
-    def assoc(self, child, c=None):
+    def assoc(self, child, relative_coords=None,
+              **kwargs):
+        """Associate child coords to this coordinate.
+
+        If `relative_coords` is `None`, the translation and rotation
+        of childcoord in the world coordinate system do not change.
+        If `relative_coords` is specified, childcoord is assoced
+        at translation and rotation of `relative_coords`.
+
+        Parameters
+        ----------
+        child : CascadedCoords
+            child coordinate.
+        relative_coords : None or Coordinates
+            child coordinate's relative coordinate.
+
+        Returns
+        -------
+        child : CascadedCoords
+            assoced child.
+        """
+        if 'c' in kwargs:
+            warnings.warn(
+                'Argument `c` is deprecated. '
+                'Please use `relative_coords` instead',
+                DeprecationWarning)
+            relative_coords = kwargs['c']
         if not (child in self.descendants):
-            if c is None:
-                c = self.worldcoords().transformation(
+            if relative_coords is None:
+                relative_coords = self.worldcoords().transformation(
                     child.worldcoords())
             child.obey(self)
-            child.newcoords(c)
+            child.newcoords(relative_coords)
             self._descendants.append(child)
             return child
 
@@ -1107,9 +1158,10 @@ class CascadedCoords(Coordinates):
             # multiply c from the left.
             transform_coords(c, self, self)
         elif wrt == 'world':
-            transform_coords(self.parentcoords, self, self)
+            parentcoords = self.parentcoords()
+            transform_coords(parentcoords, self, self)
             transform_coords(c, self, self)
-            transform_coords(self.parentcoords.inverse_transformation(),
+            transform_coords(parentcoords.inverse_transformation(),
                              self, self)
         else:
             raise ValueError('transform wrt {} is not supported'.format(wrt))
