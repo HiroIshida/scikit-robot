@@ -4,15 +4,19 @@ import skrobot
 import numpy as np
 import time
 from skrobot.utils import sdf_box
+from skrobot.model.primitives import Box
+from skrobot.model import Link
 from skrobot.planner.utils import get_robot_state, set_robot_state
 
 if __name__ == '__main__':
     robot_model = skrobot.models.urdf.RobotModelFromURDF(
         urdf_file=skrobot.data.pr2_urdfpath())
     robot_model.init_pose()
-    viewer = skrobot.viewers.TrimeshSceneViewer(resolution=(640, 480))
-    viewer.add(robot_model)
-    viewer.show()
+    debug = True
+    if debug:
+        viewer = skrobot.viewers.TrimeshSceneViewer(resolution=(640, 480))
+        viewer.add(robot_model)
+        viewer.show()
 
     link_idx_table = {}
     for link_idx in range(len(robot_model.link_list)):
@@ -30,8 +34,6 @@ if __name__ == '__main__':
 
     rarm_end_coords = skrobot.coordinates.CascadedCoords(
         parent=robot_model.r_gripper_tool_frame)
-    forarm_coords = skrobot.coordinates.CascadedCoords(
-        parent=robot_model.r_forearm_link)
 
     # set initial angle vector of rarm
     av_init = [0.58, 0.35, -0.74, -0.70, -0.17, -0.63, 0.0]
@@ -41,11 +43,12 @@ if __name__ == '__main__':
         [0.7, -0.7, 1.0], [0, 0, 0])
     box_center = np.array([0.9, -0.2, 0.9])
     box_width = np.array([0.5, 0.5, 0.6])
-    box = skrobot.models.Box(
+    box = skrobot.model.Box(
         extents=box_width, face_colors=(1., 0, 0)
     )
     box.translate(box_center)
-    viewer.add(box)
+    if debug:
+        viewer.add(box)
     margin = 0.1
 
     def sdf(X):
@@ -56,13 +59,17 @@ if __name__ == '__main__':
             target_coords, link_list, rarm_end_coords, rot_also=True)
     av_goal = get_robot_state(robot_model, joint_list) 
 
-    coll_coords_list = [rarm_end_coords, forarm_coords]
+    coll_coords_list = [
+            robot_model.r_upper_arm_link, 
+            robot_model.r_forearm_link,
+            robot_model.r_gripper_palm_link]
     traj = robot_model.plan_trajectory(
             av_start, av_goal, link_list, coll_coords_list, sdf, 10)
 
-    time.sleep(1.0)
-    print("show trajectory")
-    for av in traj:
-        set_robot_state(robot_model, joint_list, av)
-        viewer.redraw()
+    if debug:
         time.sleep(1.0)
+        print("show trajectory")
+        for av in traj:
+            set_robot_state(robot_model, joint_list, av)
+            viewer.redraw()
+            time.sleep(1.0)
