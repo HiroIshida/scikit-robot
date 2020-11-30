@@ -1,6 +1,7 @@
 import time 
 import numpy as np
 from . import utils
+from .swept_sphere import assoc_swept_sphere
 import matplotlib.pyplot as plt
 
 def plan_trajectory_rrt(self, 
@@ -21,6 +22,11 @@ def plan_trajectory_rrt(self,
         joint_maxs += [0.5]*3 # TODO tmp
     cspace = ConfigurationSpace(joint_mins, joint_maxs)
 
+    coll_sphere_list_tuple, feature_radius_list_tuple = \
+            zip(*[assoc_swept_sphere(self, link) for link in coll_cascaded_coords_list])
+    coll_sphere_list = sum(coll_sphere_list_tuple, [])
+    feature_radius_arr = np.array(sum(feature_radius_list_tuple, []))
+
     # create isValidConfiguration function
     rot_also = False # rotation is nothing to do with point collision
     if use_cpp:
@@ -28,27 +34,27 @@ def plan_trajectory_rrt(self,
 
         fksolver = self.fksolver 
         fks_joint_ids = utils.tinyfk_get_jointids(fksolver, joint_list)
-        fks_collisionlink_ids = utils.tinyfk_get_linkids(fksolver, coll_cascaded_coords_list)
+        fks_coll_link_ids = utils.tinyfk_get_linkids(fksolver, coll_sphere_list)
         def isValidConfiguration(av):
             av_traj = av.reshape(1, -1)
             with_jacobian = False
             P, _ = self.fksolver.solve_forward_kinematics(
                     av_traj,
-                    fks_collisionlink_ids,
+                    fks_coll_link_ids,
                     fks_joint_ids,
                     rot_also, 
                     base_also,
                     with_jacobian)
-            sd_vals = signed_distance_function(P)
+            sd_vals = signed_distance_function(P) - feature_radius_arr
             return np.all(sd_vals > 0.0)
     else:
         def isValidConfiguration(av):
             point_list = []
-            for collision_coords in coll_cascaded_coords_list:
+            for collision_coords in coll_sphere_list:
                 p = utils.forward_kinematics(self, link_list, av, collision_coords, 
                         rot_also=rot_also, base_also=base_also, with_jacobian=False) 
                 point_list.append(p)
-            sd_vals = signed_distance_function(np.vstack(point_list))
+            sd_vals = signed_distance_function(np.vstack(point_list)) - feature_radius_arr
             return np.all(sd_vals > 0.0)
 
     brrt = BidirectionalRRT(cspace, av_init, av_goal, 
