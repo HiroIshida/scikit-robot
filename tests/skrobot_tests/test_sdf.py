@@ -75,7 +75,7 @@ class TestSDF(unittest.TestCase):
 
     def test_surface_points(self):
         sdf, model = self.boxsdf, self.boxmodel
-        surface_points_obj, _ = sdf.surface_points(N=20)
+        surface_points_obj, _ = sdf.surface_points(n_sample=20)
         sdf_vals = sdf(surface_points_obj)
         assert np.all(np.abs(sdf_vals) < sdf._surface_threshold)
 
