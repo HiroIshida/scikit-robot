@@ -1,4 +1,6 @@
 import numpy as np
+import scipy
+import copy
 from sklearn.covariance import EmpiricalCovariance
 from skrobot.model.primitives import Sphere
 from skrobot.coordinates import CascadedCoords
@@ -87,14 +89,19 @@ class CollisionChecker(object):
 
     def collision_dists(self, 
             joint_list, angle_vector_seq, **kwargs):
+        """
+        This method is CRITICAL for faster motion plan. 
+        """
+
         joint_name_list = [j.name for j in joint_list]
         joint_id_list = self.fksolver.get_joint_ids(joint_name_list)
         return self._collision_dists(joint_id_list, angle_vector_seq, **kwargs)
 
     def _collision_dists(self, 
             joint_id_list, angle_vector_seq, base_also=False, with_jacobian=False):
-        """ 
-        compute signed distances and grads of the features points for each av in av_seq
+
+        """
+        This method is CRITICAL for faster motion plan.
         """
         rot_also = False
         n_wp, n_dof = angle_vector_seq.shape
@@ -108,7 +115,8 @@ class CollisionChecker(object):
                 rot_also, 
                 base_also,
                 with_jacobian)
-        cost_coll = self.sdf(P_fk) - np.array(self.coll_radius_list)
+        traj_coll_radius_list = self.coll_radius_list * n_wp
+        cost_coll = self.sdf(P_fk) 
 
         if with_jacobian:
             # now compute grad of cost_coll
@@ -118,7 +126,7 @@ class CollisionChecker(object):
             for i in range(3):
                 P_fk_plus = copy.copy(P_fk)
                 P_fk_plus[:, i] += eps
-                cost_coll_plus = sdf(P_fk_plus)
+                cost_coll_plus = self.sdf(P_fk_plus)
                 dcost_dP[:, i] = (cost_coll_plus - cost_coll)/eps
 
             dcost_dP = dcost_dP.reshape(n_total_feature, 1, 3)
@@ -126,11 +134,12 @@ class CollisionChecker(object):
             dcost_dq = np.matmul(dcost_dP, dP_fk_dq)
             dcost_dq_block = dcost_dq.reshape(
                     n_wp, n_feature, n_dof)
-            dcost_dq_full = scipy.linalg.block_diag(*list(dcost_dq_full))
+            dcost_dq_full = scipy.linalg.block_diag(*list(dcost_dq_block))
         else:
             dcost_dq_full = None
 
-        return cost_coll, dcost_dq_full
+        cost_coll_sphere = cost_coll - np.array(traj_coll_radius_list)
+        return cost_coll_sphere, dcost_dq_full
 
 def compute_swept_sphere(visual_mesh, 
         n_sphere=-1, 
