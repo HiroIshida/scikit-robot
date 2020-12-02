@@ -41,7 +41,7 @@ if __name__ == '__main__':
 
     target_coords = skrobot.coordinates.Coordinates(
         [0.7, -0.7, 1.0], [0, 0, 0])
-    box_center = np.array([0.9, -0.2, 0.9])
+    box_center = np.array([0.8, -0.2, 0.9])
     box_width = np.array([0.5, 0.5, 0.6])
     box = skrobot.model.Box(
         extents=box_width, face_colors=(1., 0, 0)
@@ -49,7 +49,7 @@ if __name__ == '__main__':
     box.translate(box_center)
     if debug:
         viewer.add(box)
-    margin = 0.1
+    margin = 0.02
 
     def sdf(X):
         return sdf_box(X, box_width * 0.5, box_center) - margin

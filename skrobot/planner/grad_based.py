@@ -3,12 +3,13 @@ import scipy
 import copy
 import numpy as np
 from . import utils
+from .collision import CollisionChecker
 
 def plan_trajectory(self,
                     av_start,
                     av_goal,
                     link_list,
-                    coll_cascaded_coords_list,
+                    coll_link_list,
                     signed_distance_function,
                     n_wp,
                     base_also=False,
@@ -29,8 +30,8 @@ def plan_trajectory(self,
         joint angle vector at goal point
     link_list : skrobot.model.Link
         link list to be controlled (similar to inverse_kinematics function)
-    coll_cascaded_coords_list :  list[skrobot.coordinates.base.CascadedCoords]
-        list of collision cascaded coords
+    coll_link_list :  list[skrobot.coordinates.base.CascadedCoords]
+        list of link that collision is checked
     signed_distance_function : function object 
     [2d numpy.ndarray (n_point x 3)] -> [1d numpy.ndarray (n_point)]
     n_wp : int 
@@ -54,7 +55,7 @@ def plan_trajectory(self,
     if base_also:
         joint_limits += [[-np.inf, np.inf]]*3
 
-    n_feature = len(coll_cascaded_coords_list)
+    n_feature = len(coll_link_list)
 
     # create initial solution for the optimization problem
     if initial_trajectory is None:
@@ -62,38 +63,16 @@ def plan_trajectory(self,
         initial_trajectory = np.array(
             [av_start + i * regular_interval for i in range(n_wp)])
 
+    cc = CollisionChecker(signed_distance_function, self)
+    for link in coll_link_list:
+        cc.add_collision_link(link)
+    tinyfk_joint_ids = self.fksolver.get_joint_ids([j.name for j in joint_list])
 
-    if use_cpp:
-        utils.tinyfk_copy_current_state(self)
-        fksolver = self.fksolver 
-        fks_joint_ids = utils.tinyfk_get_jointids(fksolver, joint_list)
-        fks_collisionlink_ids = utils.tinyfk_get_linkids(fksolver, coll_cascaded_coords_list)
-        def collision_fk(av_seq):
-            rot_also = False
-            with_jacobian = True
-            P, J = self.fksolver.solve_forward_kinematics(
-                    av_seq, 
-                    fks_collisionlink_ids,
-                    fks_joint_ids,
-                    rot_also, 
-                    base_also,
-                    with_jacobian)
-            return P, J
-    else:
-        def collision_fk(av_seq):
-            points, jacobs = [], []
-            for av in av_seq:
-                for collision_coords in coll_cascaded_coords_list:
-                    rot_also = False # rotation is nothing to do with point collision
-                    p, J = utils.forward_kinematics(self, link_list, av, collision_coords, 
-                            rot_also=rot_also, base_also=base_also) 
-                    points.append(p)
-                    jacobs.append(J)
-            return np.vstack(points), np.vstack(jacobs)
-
-    def collision_ineq_fun(av_trajectory):
-        return utils.sdf_collision_inequality_function(
-                av_trajectory, collision_fk, signed_distance_function, n_feature)
+    def collision_ineq_fun(av_seq):
+        F, J = cc._collision_dists(tinyfk_joint_ids, av_seq, 
+                base_also=base_also,
+                with_jacobian=True)
+        return F, J
 
     opt = GradBasedPlannerCommon(initial_trajectory,
                                  collision_ineq_fun,
