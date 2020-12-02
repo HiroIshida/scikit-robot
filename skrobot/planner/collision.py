@@ -1,4 +1,5 @@
 import numpy as np
+import warnings
 import scipy
 import copy
 from sklearn.covariance import EmpiricalCovariance
@@ -70,9 +71,7 @@ class CollisionChecker(object):
         angle_vector = np.array([j.joint_angle() for j in joint_list])
         angle_vector_seq = angle_vector.reshape(1, -1)
         dists, _ = self.collision_dists(joint_list, angle_vector_seq, base_also=base_also, with_jacobian=False)
-        print(dists)
         idxes_collide = np.where(dists < 0)[0]
-        print(idxes_collide)
 
         n_feature = len(self.coll_sphere_list)
         for idx in range(n_feature):
@@ -81,7 +80,6 @@ class CollisionChecker(object):
 
             color = self.color_collision_sphere if idx in idxes_collide \
                     else self.color_normal_sphere
-            print(color)
             sphere._visual_mesh.visual.face_colors = np.array([color]*n_facet)
         return dists
 
@@ -101,6 +99,11 @@ class CollisionChecker(object):
         """
         This method is CRITICAL for faster motion plan.
         """
+        for i in range(20):
+            warnings.warn("plase reflect robot_model state to tinyfk!\n"*10, UserWarning)
+        if base_also:
+            raise NotImplementedError("must set base_pose to tinyfk")
+
         rot_also = False
         n_wp, n_dof = angle_vector_seq.shape
         n_feature = len(self.coll_sphere_list)
