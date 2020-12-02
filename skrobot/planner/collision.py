@@ -19,7 +19,6 @@ class CollisionChecker(object):
         self.coll_sphere_list = []
         self.coll_radius_list = []
         self.coll_sphere_id_list = []
-        self.n_feature = 0
 
         self.color_normal_sphere = [250, 250, 10, 200]
         self.color_collision_sphere = [255, 0, 0, 200]
@@ -54,7 +53,6 @@ class CollisionChecker(object):
 
         self.coll_sphere_list.extend(sphere_list)
         self.coll_radius_list.extend([R]*len(sphere_list))
-        self.n_feature = len(self.coll_sphere_list)
 
         # fksolver specific procedure
         coll_link_id = self.fksolver.get_link_ids([coll_link.name])[0]
@@ -64,7 +62,7 @@ class CollisionChecker(object):
         self.coll_sphere_id_list.extend(
                 self.fksolver.get_link_ids(sphere_names))
 
-    def debug_color(self, base_also=False):
+    def update_color(self, base_also=False):
         if base_also:
             raise NotImplementedError
 
@@ -72,20 +70,20 @@ class CollisionChecker(object):
         angle_vector = np.array([j.joint_angle() for j in joint_list])
         angle_vector_seq = angle_vector.reshape(1, -1)
         dists, _ = self.collision_dists(joint_list, angle_vector_seq, base_also=base_also, with_jacobian=False)
+        print(dists)
         idxes_collide = np.where(dists < 0)[0]
+        print(idxes_collide)
 
-        for idx in idxes_collide:
+        n_feature = len(self.coll_sphere_list)
+        for idx in range(n_feature):
             sphere = self.coll_sphere_list[idx]
             n_facet = len(sphere._visual_mesh.visual.face_colors)
-            sphere._visual_mesh.visual.face_colors = np.array(
-                    [self.color_collision_sphere] * n_facet)
-        return dists
 
-    def refresh_color(self):
-        for sphere in self.coll_sphere_list:
-            n_facet = len(sphere._visual_mesh.visual.face_colors)
-            sphere._visual_mesh.visual.face_colors = np.array(
-                    [self.color_normal_sphere] * n_facet)
+            color = self.color_collision_sphere if idx in idxes_collide \
+                    else self.color_normal_sphere
+            print(color)
+            sphere._visual_mesh.visual.face_colors = np.array([color]*n_facet)
+        return dists
 
     def collision_dists(self, 
             joint_list, angle_vector_seq, **kwargs):
@@ -105,7 +103,7 @@ class CollisionChecker(object):
         """
         rot_also = False
         n_wp, n_dof = angle_vector_seq.shape
-        n_feature = len(self.coll_sphere_id_list)
+        n_feature = len(self.coll_sphere_list)
         n_total_feature = n_wp * n_feature
 
         P_fk, dP_fk_dq = self.fksolver.solve_forward_kinematics(

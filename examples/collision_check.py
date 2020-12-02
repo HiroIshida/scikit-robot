@@ -39,18 +39,12 @@ except:
                  for lname in link_names]
     joint_list = [link.joint for link in link_list]
 
-av = [0.2] * 7
 set_robot_state(robot_model, joint_list, [0.4, 0.6] + [-0.7]*5)
 
 cc = CollisionChecker(table.sdf, robot_model)
 [cc.add_collision_link(l) for l in coll_link_list]
 cc.add_coll_spheres_to_viewer(viewer)
+cc.update_color()
 viewer.add(table)
 viewer.add(robot_model)
 viewer.show()
-
-cc.debug_color()
-cc.refresh_color()
-
-
-
