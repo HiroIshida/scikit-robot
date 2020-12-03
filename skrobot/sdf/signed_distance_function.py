@@ -6,8 +6,7 @@ import numpy as np
 import pysdfgen
 from math import floor
 from skrobot.coordinates.math import normalize_vector
-from skrobot.coordinates.similarity_transform import \
-    SimilarityTransformCoordinates
+from skrobot.coordinates import CascadedCoords
 from scipy.interpolate import RegularGridInterpolator
 
 logger = getLogger(__name__)
@@ -51,13 +50,12 @@ class UnionSDF(object):
         #import IPython; IPython.embed()
         return points[logicals], sd_vals[logicals]
 
-class SignedDistanceFunction(SimilarityTransformCoordinates):
-    def __init__(self, origin, scale, use_abs=False, *args, **kwargs):
+class SignedDistanceFunction(CascadedCoords):
+    def __init__(self, origin, use_abs=False, *args, **kwargs):
         super(SignedDistanceFunction, self).__init__(*args, **kwargs)
 
-        self.sdf_to_obj_transform = SimilarityTransformCoordinates(
-            pos=origin,
-            scale=scale)
+        self.sdf_to_obj_transform = CascadedCoords(
+            pos=origin)
         self._origin = np.array(origin)
         self.use_abs = use_abs
 
@@ -92,7 +90,7 @@ class SignedDistanceFunction(SimilarityTransformCoordinates):
         return logicals, sd_vals
 
     def surface_points(self, n_sample=1000):
-        points_, dists = self._surface_points(n_sample=n_sample)
+        points_, dists = self._surface_points(n_sample=n_sample) 
         points = self.transform_pts_sdf_to_obj(points_)
         return points, dists
 
@@ -183,8 +181,7 @@ class BoxSDF(SignedDistanceFunction):
 
     def __init__(self, origin, width, use_abs=False,
                  *args, **kwargs):
-        scale = 1.0
-        super(BoxSDF, self).__init__(origin, scale, use_abs, *args, **kwargs)
+        super(BoxSDF, self).__init__(origin, use_abs, *args, **kwargs)
         self._width = np.array(width)
         self._surface_threshold = np.min(self._width) * 1e-2
 
@@ -239,7 +236,7 @@ class GridSDF(SignedDistanceFunction):
 
     def __init__(self, sdf_data, origin, resolution, use_abs=False,
                  *args, **kwargs):
-        super(GridSDF, self).__init__(origin, resolution, use_abs=use_abs, *args, **kwargs)
+        super(GridSDF, self).__init__(origin, use_abs=use_abs, *args, **kwargs)
         # optionally use only the absolute values
         # (useful for non-closed meshes in 3D)
         self._data = np.abs(sdf_data) if use_abs else sdf_data
@@ -248,7 +245,7 @@ class GridSDF(SignedDistanceFunction):
 
 
         # create regular grid interpolator
-        xlin, ylin, zlin = [range(d) for d in self.data.shape]
+        xlin, ylin, zlin = [np.array(range(d)) * resolution for d in self.data.shape]
         self.itp = RegularGridInterpolator(
                 (xlin, ylin, zlin), 
                 sdf_data,
@@ -258,10 +255,8 @@ class GridSDF(SignedDistanceFunction):
         spts, _ = self.surface_points()
         self._center = 0.5 * (np.min(spts, axis=0) + np.max(spts, axis=0))
 
-        self.sdf_to_obj_transform = SimilarityTransformCoordinates(
-            pos=self.origin,
-            scale=self.resolution)
-
+        self.sdf_to_obj_transform = CascadedCoords(
+            pos=self.origin)
 
     @property
     def dimensions(self):
@@ -326,16 +321,10 @@ class GridSDF(SignedDistanceFunction):
         is_out : bool
             If points is in grid, return True.
         """
-        points = np.array(points_sdf)
-        if points.ndim == 1:
-            return np.array(points < 0).any() or \
-                np.array(points >= self.dimensions).any()
-        elif points.ndim == 2:
-            return np.logical_or(
-                (points < 0).any(axis=1),
-                (points >= np.array(self.dimensions)).any(axis=1))
-        else:
-            raise ValueError
+        points_grid = np.array(points_sdf) / self.resolution
+        return np.logical_or(
+            (points_grid < 0).any(axis=1),
+            (points_grid >= np.array(self.dimensions)).any(axis=1))
 
     @property
     def data(self):
@@ -555,7 +544,7 @@ class GridSDF(SignedDistanceFunction):
             idxes = np.random.permutation(n_pts)[:n_sample]
             surface_points, surface_values = surface_points[idxes], surface_values[idxes]
 
-        return surface_points, surface_values
+        return surface_points * self.resolution, surface_values
 
     @staticmethod
     def from_file(filepath):
