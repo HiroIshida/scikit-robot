@@ -32,6 +32,8 @@ class SignedDistanceFunction(CascadedCoords):
         """
         points_sdf = self.transform_pts_obj_to_sdf(points_obj)
         sd = self._signed_distance(points_sdf)
+        if self.use_abs:
+            return np.abs(sd)
         return sd
 
     def on_surface(self, points_obj):
