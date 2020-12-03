@@ -11,45 +11,6 @@ from scipy.interpolate import RegularGridInterpolator
 
 logger = getLogger(__name__)
 
-class UnionSDF(object):
-    """UinonSDF is Not a child of CascadedCoords
-    """
-    def __init__(self, sdf_list):
-        use_abs_list = [sdf.use_abs for sdf in sdf_list]
-        all_false = np.all(np.array(use_abs_list) == False)
-        assert all_false, "use_abs for each sdf must be consistent"
-
-        self.sdf_list = sdf_list
-
-    def __call__(self, points_obj):
-        sd_vals_list = np.array([sdf(points_obj) for sdf in self.sdf_list])
-        sd_vals_union = np.min(sd_vals_list, axis=0)
-        return sd_vals_union
-
-    def on_surface(self, points_obj):
-        # TODO duplication with SignedDistanceFunction
-        sd_vals = self.__call__(points_obj)
-        logicals = np.abs(sd_vals) < self.surface_threshold
-        return logicals, sd_vals
-
-    @property
-    def surface_threshold(self):
-        threshold_list = [sdf.surface_threshold for sdf in self.sdf_list]
-        return max(threshold_list)
-
-    def surface_points(self, n_sample=1000):
-        # equaly asign sample number to each sdf.surface_points()
-        n_list = len(self.sdf_list)
-        n_sample_each = floor(n_sample/n_list)
-        n_sample_last = n_sample - n_sample_each * (n_list - 1)
-        num_list = [n_sample_each]*(n_list - 1) + [n_sample_last]
-
-        points = np.vstack([sdf.surface_points(n_sample=n_sample_)[0] 
-            for sdf, n_sample_ in zip(self.sdf_list, num_list)])
-        logicals, sd_vals = self.on_surface(points)
-        #import IPython; IPython.embed()
-        return points[logicals], sd_vals[logicals]
-
 class SignedDistanceFunction(CascadedCoords):
     def __init__(self, origin, use_abs=False, *args, **kwargs):
         super(SignedDistanceFunction, self).__init__(*args, **kwargs)
@@ -176,6 +137,43 @@ class SignedDistanceFunction(CascadedCoords):
                 self.sdf_to_obj_transform).transform_vector(
                     points_sdf.astype(np.float32))
         return points_obj
+
+
+class UnionSDF(SignedDistanceFunction):
+
+    def __init__(self, sdf_list, *args, **kwargs):
+        origin = np.zeros(3)
+        use_abs = False 
+        super(UnionSDF, self).__init__(origin, use_abs, *args, **kwargs)
+
+        use_abs_list = [sdf.use_abs for sdf in sdf_list]
+        all_false = np.all(np.array(use_abs_list) == False)
+        assert all_false, "use_abs for each sdf must be consistent"
+
+        self.sdf_list = sdf_list
+
+    def __call__(self, points_obj):
+        sd_vals_list = np.array([sdf(points_obj) for sdf in self.sdf_list])
+        sd_vals_union = np.min(sd_vals_list, axis=0)
+        return sd_vals_union
+
+    @property
+    def surface_threshold(self):
+        threshold_list = [sdf.surface_threshold for sdf in self.sdf_list]
+        return max(threshold_list)
+
+    def surface_points(self, n_sample=1000):
+        # equaly asign sample number to each sdf.surface_points()
+        n_list = len(self.sdf_list)
+        n_sample_each = int(floor(n_sample/n_list))
+        n_sample_last = n_sample - n_sample_each * (n_list - 1)
+        num_list = [n_sample_each]*(n_list - 1) + [n_sample_last]
+
+        points = np.vstack([sdf.surface_points(n_sample=n_sample_)[0] 
+            for sdf, n_sample_ in zip(self.sdf_list, num_list)])
+        logicals, sd_vals = self.on_surface(points)
+        return points[logicals], sd_vals[logicals]
+
 
 class BoxSDF(SignedDistanceFunction):
 
@@ -401,7 +399,6 @@ class GridSDF(SignedDistanceFunction):
 
             # log warning if out of bounds access
             if self.is_out_of_bounds(points_sdf):
-                # print('Out of bounds access. Snapping to GridSDF dims')
                 pass
 
             # snap to grid dims
