@@ -115,7 +115,7 @@ class TestSDF(unittest.TestCase):
         assert np.all(np.abs(sd_vals) < sdf._surface_threshold) 
 
         # sd of points outside of bounds must be np.inf
-        point_outofbound = (sdf.dimensions + 1).reshape(1, 3)
+        point_outofbound = (sdf._dims + 1).reshape(1, 3)
         sd_vals = sdf._signed_distance(point_outofbound)
         assert np.all(np.isinf(sd_vals))
 
@@ -135,17 +135,17 @@ class TestSDF(unittest.TestCase):
             [ 0.02802324,  0.11360088, -0.00837826],
             [-0.07714015,  0.15152866,  0.0329975 ]
             ])
-        assert np.all(abs(sdf(pts_on_surface)) < sdf.surface_threshold)
+        assert np.all(abs(sdf(pts_on_surface)) < sdf._surface_threshold)
 
     def test_unionsdf_surface_points(self):
         sdf = self.unionsdf
         sdf.surface_points()
         pts, sd_vals = sdf.surface_points()
-        assert np.all(np.abs(sd_vals) < sdf.surface_threshold)
+        assert np.all(np.abs(sd_vals) < sdf._surface_threshold)
 
         sub_sdf1, sub_sdf2 = self.unionsdf.sdf_list
-        on_surface1 = sub_sdf1(pts) < sub_sdf1.surface_threshold
-        on_surface2 = sub_sdf2(pts) < sub_sdf2.surface_threshold
+        on_surface1 = sub_sdf1(pts) < sub_sdf1._surface_threshold
+        on_surface2 = sub_sdf2(pts) < sub_sdf2._surface_threshold
         cond_or = np.logical_or(on_surface1, on_surface2) 
         assert np.all(cond_or) # at least on either of the surface
 

@@ -49,7 +49,7 @@ class SignedDistanceFunction(CascadedCoords):
         :obj:`tuple` of numpy.ndarray[bool], ndarray[float]
         """
         sd_vals = self.__call__(points_obj)
-        logicals = np.abs(sd_vals) < self.surface_threshold
+        logicals = np.abs(sd_vals) < self._surface_threshold
         return logicals, sd_vals
 
     def surface_points(self, n_sample=1000):
@@ -69,22 +69,8 @@ class SignedDistanceFunction(CascadedCoords):
         """
         return self._origin
 
-    @property
-    def surface_threshold(self):
-        """Threshold of surface value.
-
-        Returns
-        -------
-        self._surface_threshold : float
-            threshold
-        """
-        return self._surface_threshold
-
-
-    def transform_pts_obj_to_sdf(self, points_obj, direction=False):
+    def transform_pts_obj_to_sdf(self, points_obj):
         """Converts a point w.r.t. sdf basis to the grid basis.
-
-        If direction is True, don't translate.
 
         Parameters
         ----------
@@ -96,48 +82,27 @@ class SignedDistanceFunction(CascadedCoords):
         points_sdf : numpy Nx3 ndarray or scalar
             points in grid basis
         """
-        if isinstance(points_obj, Number):
-            return self.copy_worldcoords().transform(
-                self.sdf_to_obj_transform
-            ).inverse_transformation().scale * points_obj.T
-        if direction is True:
-            # 1 / s [R^T v - R^Tp] p == 0 case
-            points_sdf = np.dot(points_obj.T, self.copy_worldcoords().transform(
-                self.sdf_to_obj_transform).worldrot().T)
-        else:
-            points_sdf = self.copy_worldcoords().transform(
-                self.sdf_to_obj_transform).inverse_transform_vector(points_obj)
+        points_sdf = self.copy_worldcoords().transform(
+            self.sdf_to_obj_transform).inverse_transform_vector(points_obj)
         return points_sdf
 
-    def transform_pts_sdf_to_obj(self, points_sdf, direction=False):
+    def transform_pts_sdf_to_obj(self, points_sdf):
         """Converts a point w.r.t. grid basis to the obj basis.
-
-        If direction is True, then don't translate.
 
         Parameters
         ----------
-        points_sdf : numpy.ndarray or numbers.Number
-            Nx3 ndarray or numeric scalar
+        points_sdf : numpy.ndarray 
+            Nx3 ndarray
             points to transform from grid basis to sdf basis in meters
-        direction : bool
-            If this value is True, points_sdf treated as normal vectors.
 
         Returns
         -------
         points_obj : numpy.ndarray
             Nx3 ndarray. points in sdf basis (meters)
         """
-        if isinstance(points_sdf, Number):
-            return self.copy_worldcoords().transform(
-                self.sdf_to_obj_transform).scale * points_sdf
-
-        if direction:
-            points_obj = np.dot(points_sdf.T, self.copy_worldcoords().transform(
-                self.sdf_to_obj_transform).worldrot().T)
-        else:
-            points_obj = self.copy_worldcoords().transform(
-                self.sdf_to_obj_transform).transform_vector(
-                    points_sdf.astype(np.float32))
+        points_obj = self.copy_worldcoords().transform(
+            self.sdf_to_obj_transform).transform_vector(
+                points_sdf.astype(np.float32))
         return points_obj
 
 
@@ -154,15 +119,13 @@ class UnionSDF(SignedDistanceFunction):
 
         self.sdf_list = sdf_list
 
+        threshold_list = [sdf._surface_threshold for sdf in sdf_list]
+        self._surface_threshold = max(threshold_list)
+
     def __call__(self, points_obj):
         sd_vals_list = np.array([sdf(points_obj) for sdf in self.sdf_list])
         sd_vals_union = np.min(sd_vals_list, axis=0)
         return sd_vals_union
-
-    @property
-    def surface_threshold(self):
-        threshold_list = [sdf.surface_threshold for sdf in self.sdf_list]
-        return max(threshold_list)
 
     def surface_points(self, n_sample=1000):
         # equaly asign sample number to each sdf.surface_points()
@@ -240,79 +203,29 @@ class GridSDF(SignedDistanceFunction):
         # optionally use only the absolute values
         # (useful for non-closed meshes in 3D)
         self._data = np.abs(sdf_data) if use_abs else sdf_data
-        self._dims = np.array(self.data.shape)
-        self.resolution = resolution
-
+        self._dims = np.array(self._data.shape)
+        self._resolution = resolution
+        self._surface_threshold = resolution * np.sqrt(2) / 2.0
 
         # create regular grid interpolator
-        xlin, ylin, zlin = [np.array(range(d)) * resolution for d in self.data.shape]
+        xlin, ylin, zlin = [np.array(range(d)) * resolution for d in self._data.shape]
         self.itp = RegularGridInterpolator(
                 (xlin, ylin, zlin), 
-                sdf_data,
+                self._data,
                 bounds_error=False,
                 fill_value=np.inf)
 
-        spts, _ = self.surface_points()
-        self._center = 0.5 * (np.min(spts, axis=0) + np.max(spts, axis=0))
+        spts, _ = self._surface_points()
 
         self.sdf_to_obj_transform = CascadedCoords(
             pos=self.origin)
-
-    @property
-    def dimensions(self):
-        """GridSDF dimension information.
-
-        Returns
-        -------
-        self._dims : numpy.ndarray
-            dimension of this sdf.
-        """
-        return self._dims
-
-    @property
-    def resolution(self):
-        """The grid resolution (how wide each grid cell is).
-
-        Resolution is max dist from a surface when the surface
-        is orthogonal to diagonal grid cells
-
-        Returns
-        -------
-        self._resolution : float
-            The width of each grid cell.
-        """
-        return self._resolution
-
-    @resolution.setter
-    def resolution(self, res):
-        """Setter of resolution.
-
-        Parameters
-        ----------
-        res : float
-            new resolution.
-        """
-        self._resolution = res
-        self._surface_threshold = res * np.sqrt(2) / 2.0
-
-    @property
-    def center(self):
-        """Center of grid.
-
-        This basically transforms the world frame to grid center.
-
-        Returns
-        -------
-        :obj:`numpy.ndarray`
-        """
-        return self._center
 
     def is_out_of_bounds(self, points_sdf):
         """Returns True if points is an out of bounds access.
 
         Parameters
         ----------
-        points_sdf : numpy.ndarray or list of int
+        points_sdf : numpy.ndarray
             3-dimensional ndarray that indicates the desired
             coordinates in the grid.
 
@@ -321,21 +234,10 @@ class GridSDF(SignedDistanceFunction):
         is_out : bool
             If points is in grid, return True.
         """
-        points_grid = np.array(points_sdf) / self.resolution
+        points_grid = np.array(points_sdf) / self._resolution
         return np.logical_or(
             (points_grid < 0).any(axis=1),
-            (points_grid >= np.array(self.dimensions)).any(axis=1))
-
-    @property
-    def data(self):
-        """The GridSDF data.
-
-        Returns
-        -------
-        self._data : numpy.ndarray
-            The 3-dimensional ndarray that holds the grid of signed distances.
-        """
-        return self._data
+            (points_grid >= np.array(self._dims)).any(axis=1))
 
     def _signed_distance(self, points_sdf):
         """Returns the signed distance at the given coordinates
@@ -352,188 +254,15 @@ class GridSDF(SignedDistanceFunction):
         sd_vals = self.itp(points_sdf)
         return sd_vals
 
-    def __getitem__(self, points_sdf):
-        """Returns the signed distance at the given coordinates.
-
-        Parameters
-        ----------
-        points_sdf : numpy.ndarray
-            A or 3-dimensional ndarray that indicates the desired
-            coordinates in the grid.
-
-        Returns
-        -------
-        sd : float
-            The signed distance at the given points_sdf (interpolated).
-        """
-        return self._signed_distance(points_sdf)
-
-    def surface_normal(self, points_sdf, delta=1.5):
-        """Returns the sdf surface normal at the given coordinates
-
-        Returns the sdf surface normal at the given coordinates by
-        computing the tangent plane using GridSDF interpolation.
-
-        Parameters
-        ----------
-        points_sdf : numpy.ndarray
-            A 3-dimensional ndarray that indicates the desired
-            coordinates in the grid.
-
-        delta : float
-            A radius for collecting surface points near the target coords
-            for calculating the surface normal.
-
-        Returns
-        -------
-        :obj:`numpy.ndarray` of float
-            The 3-dimensional ndarray that represents the surface normal.
-
-        Raises
-        ------
-        IndexError
-            If the points does not have three entries.
-        """
-        points_sdf = np.array(points_sdf)
-        if points_sdf.ndim == 1:
-            if len(points_sdf) != 3:
-                raise IndexError('Indexing must be 3 dimensional')
-
-            # log warning if out of bounds access
-            if self.is_out_of_bounds(points_sdf):
-                pass
-
-            # snap to grid dims
-            points_sdf[0] = max(
-                0, min(points_sdf[0], self.dimensions[0] - 1))
-            points_sdf[1] = max(
-                0, min(points_sdf[1], self.dimensions[1] - 1))
-            points_sdf[2] = max(
-                0, min(points_sdf[2], self.dimensions[2] - 1))
-            index_point = np.zeros(3)
-
-            # check points on surface
-            sdf_val = self[points_sdf]
-            if np.abs(sdf_val) >= self.surface_threshold:
-                return None
-
-            # collect all surface points within the delta sphere
-            X = []
-            d = np.zeros(3)
-            dx = -delta
-            while dx <= delta:
-                dy = -delta
-                while dy <= delta:
-                    dz = -delta
-                    while dz <= delta:
-                        d = np.array([dx, dy, dz])
-                        if dx != 0 or dy != 0 or dz != 0:
-                            d = delta * normalize_vector(d)
-                        index_point[0] = points_sdf[0] + d[0]
-                        index_point[1] = points_sdf[1] + d[1]
-                        index_point[2] = points_sdf[2] + d[2]
-                        sdf_val = self[index_point]
-                        if np.abs(sdf_val) < self.surface_threshold:
-                            X.append([index_point[0], index_point[1],
-                                      index_point[2], sdf_val])
-                        dz += delta
-                    dy += delta
-                dx += delta
-
-            # fit a plane to the surface points
-            X.sort(key=lambda x: x[3])
-            X = np.array(X)[:, :3]
-            A = X - np.mean(X, axis=0)
-            try:
-                U, S, V = np.linalg.svd(A.T)
-                n = U[:, 2]
-            except np.linalg.LinAlgError:
-                return None
-            return n
-        elif points_sdf.ndim == 2:
-            invalid_normals = self.is_out_of_bounds(points_sdf)
-            valid_normals = np.logical_not(invalid_normals)
-            n = len(points_sdf)
-            indices = np.arange(n)[valid_normals]
-            normals = np.nan * np.ones((n, 3))
-            points_sdf = points_sdf[valid_normals]
-
-            if len(points_sdf) == 0:
-                return normals
-            points_sdf = np.maximum(
-                0, np.minimum(points_sdf, np.array(self.dimensions) - 1))
-
-            # check points on surface
-            sdf_val = self[points_sdf]
-            valid_surfaces = np.abs(sdf_val) < self.surface_threshold
-            indices = indices[valid_surfaces]
-
-            points_sdf = points_sdf[valid_surfaces]
-
-            if len(points_sdf) == 0:
-                return normals
-
-            # collect all surface points within the delta sphere
-            X = np.inf * np.ones((len(points_sdf), 27, 4), dtype=np.float64)
-            dx = - delta
-            for i in range(3):
-                dy = - delta
-                for j in range(3):
-                    dz = - delta
-                    for k in range(3):
-                        d = np.array([dx, dy, dz])
-                        if dx != 0 or dy != 0 or dz != 0:
-                            d = delta * normalize_vector(d)
-                        index_point = points_sdf + d
-                        sdf_val = self[index_point]
-                        flags = np.abs(sdf_val) < self.surface_threshold
-                        X[flags, (i * 9) + (j * 3) + k, :3] = index_point[
-                            flags]
-                        X[flags, (i * 9) + (j * 3) + k, 3] = sdf_val[flags]
-                        dz += delta
-                    dy += delta
-                dx += delta
-
-            # fit a plane to the surface points
-            for i, x in enumerate(X):
-                x = x[~np.isinf(x[:, 3])]
-                if len(x) != 0:
-                    x = x[np.argsort(x[:, 3])]
-                    x = x[:, :3]
-                    A = x - np.mean(x, axis=0)
-                    try:
-                        U, S, V = np.linalg.svd(A.T)
-                        normal = U[:, 2]
-                    except np.linalg.LinAlgError:
-                        normal = np.nan * np.ones(3)
-                else:
-                    normal = np.nan * np.ones(3)
-                normals[indices[i]] = normal
-            return normals
-        else:
-            raise ValueError
-
     def _surface_points(self, n_sample=None):
         """Returns the points on the surface.
-
-        Parameters
-        ----------
-        grid_basis : bool
-            If False, the surface points are transformed to the world frame.
-            If True (default), the surface points are left in grid coordinates.
-
-        Returns
-        -------
-        :obj:`tuple` of :obj:`numpy.ndarray` of int, :obj:`numpy.ndarray` of
-            float. The points on the surface and the signed distances at
-            those points.
         """
-        surface_points = np.where(np.abs(self.data) < self.surface_threshold)
+        surface_points = np.where(np.abs(self._data) < self._surface_threshold)
         x = surface_points[0]
         y = surface_points[1]
         z = surface_points[2]
         surface_points = np.c_[x, np.c_[y, z]]
-        surface_values = self.data[surface_points[:, 0],
+        surface_values = self._data[surface_points[:, 0],
                                    surface_points[:, 1],
                                    surface_points[:, 2]]
         if n_sample is not None:
@@ -543,7 +272,7 @@ class GridSDF(SignedDistanceFunction):
             idxes = np.random.permutation(n_pts)[:n_sample]
             surface_points, surface_values = surface_points[idxes], surface_values[idxes]
 
-        return surface_points * self.resolution, surface_values
+        return surface_points * self._resolution, surface_values
 
     @staticmethod
     def from_file(filepath):
