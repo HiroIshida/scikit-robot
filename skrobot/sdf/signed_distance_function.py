@@ -30,7 +30,7 @@ class SignedDistanceFunction(CascadedCoords):
         ------
         singed distances : 1d numpy.ndarray (n_point)
         """
-        points_sdf = self.transform_pts_obj_to_sdf(points_obj)
+        points_sdf = self._transform_pts_obj_to_sdf(points_obj)
         sd = self._signed_distance(points_sdf)
         if self.use_abs:
             return np.abs(sd)
@@ -54,7 +54,7 @@ class SignedDistanceFunction(CascadedCoords):
 
     def surface_points(self, n_sample=1000):
         points_, dists = self._surface_points(n_sample=n_sample) 
-        points = self.transform_pts_sdf_to_obj(points_)
+        points = self._transform_pts_sdf_to_obj(points_)
         return points, dists
 
     @property
@@ -69,7 +69,7 @@ class SignedDistanceFunction(CascadedCoords):
         """
         return self._origin
 
-    def transform_pts_obj_to_sdf(self, points_obj):
+    def _transform_pts_obj_to_sdf(self, points_obj):
         """Converts a point w.r.t. sdf basis to the grid basis.
 
         Parameters
@@ -86,7 +86,7 @@ class SignedDistanceFunction(CascadedCoords):
             self.sdf_to_obj_transform).inverse_transform_vector(points_obj)
         return points_sdf
 
-    def transform_pts_sdf_to_obj(self, points_sdf):
+    def _transform_pts_sdf_to_obj(self, points_sdf):
         """Converts a point w.r.t. grid basis to the obj basis.
 
         Parameters
@@ -127,7 +127,7 @@ class UnionSDF(SignedDistanceFunction):
         sd_vals_union = np.min(sd_vals_list, axis=0)
         return sd_vals_union
 
-    def surface_points(self, n_sample=1000):
+    def _surface_points(self, n_sample=1000):
         # equaly asign sample number to each sdf.surface_points()
         n_list = len(self.sdf_list)
         n_sample_each = int(floor(n_sample/n_list))
@@ -220,7 +220,7 @@ class GridSDF(SignedDistanceFunction):
         self.sdf_to_obj_transform = CascadedCoords(
             pos=self.origin)
 
-    def is_out_of_bounds(self, points_sdf):
+    def is_out_of_bounds(self, points_obj):
         """Returns True if points is an out of bounds access.
 
         Parameters
@@ -234,6 +234,7 @@ class GridSDF(SignedDistanceFunction):
         is_out : bool
             If points is in grid, return True.
         """
+        points_sdf = super(GridSDF, self)._transform_pts_obj_to_sdf(points_obj)
         points_grid = np.array(points_sdf) / self._resolution
         return np.logical_or(
             (points_grid < 0).any(axis=1),
