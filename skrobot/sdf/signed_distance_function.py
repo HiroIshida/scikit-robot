@@ -12,6 +12,30 @@ from scipy.interpolate import RegularGridInterpolator
 logger = getLogger(__name__)
 
 class SignedDistanceFunction(CascadedCoords):
+    """A base class for signed distance functions (SDFs).
+    For understang of suffixes `_sdf` and `_obj` (e.g. `points_sdf`), let us
+    briefly explain the procedures take place in the computation of signed distances.
+
+    First, `__call__`, which is a public method, takes points in the sdf's object-specific
+    coordinate as an argument. Noting that every SDF classes are subclass of CascadedCoords,
+    the object-specific coordinates is nothing to do with specific type of SDF.
+    -----------
+    >>> b = BoxSDF(pos=[1, 1, 1])
+
+    then 
+
+
+
+
+    
+    Then, by using _transform_pts_obj_to_sdf, 
+    the points are transformed so that described w.r.t. the sdf-specific
+    coordinates. Each SDF class (e.g. BoxSDF and GridSDF) has its own 
+    coordinate inside, which we call sdf-specific coordinate.
+
+    Now, each signed-distnace computation is done inside the 
+    """
+
     def __init__(self, origin, use_abs=False, *args, **kwargs):
         super(SignedDistanceFunction, self).__init__(*args, **kwargs)
 
