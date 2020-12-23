@@ -77,6 +77,78 @@ def transform_coords(c1, c2, out=None):
     return out
 
 
+class Transform(object):
+    """Transform specified by translation and rotation
+
+    Parameters
+    ----------
+    translation : list(3,) or numpy.ndarray(3,)
+        translation
+    rot : numpy.ndarray(3, 3)
+        3x3 rotation matrix
+    """
+
+    def __init__(self, translation, rotation):
+        self.translation = np.array(translation)
+        self.rotation = rotation
+
+    def __call__(self, pts):
+        """Apply this transform to point/points
+
+        Parameters
+        ----------
+        pts : numpy.ndarray(3,) or numpy.ndarray(n_points, 3)
+            point/points to be transformed
+
+        Returns
+        -------
+        pts_transformed : numpy.ndarray(3,) or numpy.ndarray(n_points, 3)
+            transformed points
+        """
+        assert pts.ndim < 3, "pts must be either 1 or 2 dimensional."
+        if pts.ndim == 1:
+            return self.rotation.dot(pts.T) + self.translation
+        if pts.ndim == 2:
+            return self.rotation.dot(pts.T).T + self.translation[None, :]
+
+    def get_inverse(self):
+        """Return inverse transform
+
+        Returns
+        -------
+        inv_transform : skrobot.coordinates.base.Transform
+            inverse transformation
+        """
+        new_rot = self.rotation.T
+        new_trans = -new_rot.dot(self.translation)
+        return Transform(new_trans, new_rot)
+
+    def __mul__(self, tf_23):
+        """Composite this transform with other transform
+
+        Parameters
+        ----------
+        tf_23 : skrobot.coordinates.base.Transform
+            the other transform.
+
+        Returns
+        -------
+        tf_13 : skrobot.coordinates.base.Transform
+            Let this (self) transform as tf_12, then with the
+            other transform tf_23, we obtain tf_13 = tf_12 * tf_23
+        """
+        tf_12 = self
+        tran_12, rot_12 = tf_12.translation, tf_12.rotation
+        tran_23, rot_23 = tf_23.translation, tf_23.rotation
+        rot_13 = rot_23.dot(rot_12)
+        tran_13 = tran_23 + rot_23.dot(tran_12)
+        tf_13 = Transform(tran_13, rot_13)
+        return tf_13
+
+    def __rmul__(self, other):
+        return other.__mul__(self)
+
+
 class Coordinates(object):
 
     """Coordinates class to manipulate rotation and translation.
@@ -122,6 +194,16 @@ class Coordinates(object):
             yield
         finally:
             self._hook = hook
+
+    def get_transform(self):
+        """Return Transform object
+
+        Returns
+        -------
+        transform : skrobot.coordinates.base.Transform
+            corrensponding Transform to this coordinates
+        """
+        return Transform(self.worldpos(), self.worldrot())
 
     @property
     def rotation(self):
