@@ -86,7 +86,7 @@ class TestConstraintManager(unittest.TestCase):
 
         position_desired = np.array([0.8, -0.6, 0.7, 0, 0, 0])
         with_base = True
-        cons = PoseConstraint(n_wp, n_dof, 2, "r_gripper_tool_frame", position_desired,
+        cons = PoseConstraint(n_wp, n_dof, 2, ["r_gripper_tool_frame"], [position_desired],
                 cm.fksolver, cm.joint_ids, with_base)
         func = cons.gen_func()
         # TODO test generated function

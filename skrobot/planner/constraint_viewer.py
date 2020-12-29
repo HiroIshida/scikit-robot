@@ -19,7 +19,7 @@ class ConstraintViewer(object):
         desired_pose_list = []
         for constraint in self.cm.constraint_table.values():
             if isinstance(constraint, PoseConstraint):
-                desired_pose_list.append(constraint.pose_desired)
+                desired_pose_list.extend(constraint.pose_desired_list)
 
         for pose in desired_pose_list:
             hasRotation = (len(pose) == 6) # pose can be 3dim position

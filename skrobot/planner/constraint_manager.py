@@ -50,7 +50,7 @@ class ConfigurationConstraint(EqualityConstraint):
         return self.av_desired
 
 class PoseConstraint(EqualityConstraint):
-    def __init__(self, n_wp, n_dof, idx_wp, coords_name, pose_desired, 
+    def __init__(self, n_wp, n_dof, idx_wp, coords_name_list, pose_desired_list, 
             fksolver, joint_ids, with_base,
             name=None):
         # here pose order is [x, y, z, r, p, y]
@@ -58,40 +58,62 @@ class PoseConstraint(EqualityConstraint):
             name = 'eq_pose_const_{}'.format(str(uuid.uuid1()).replace('-', '_'))
         super(PoseConstraint, self).__init__(n_wp, n_dof, idx_wp, name)
 
-        self.coords_name = coords_name
-        self.pose_desired = pose_desired
-        self.rank = len(pose_desired)
-
-        self.with_rot = (self.rank == 6)
+        self.coords_name_list = coords_name_list
+        self.pose_desired_list = pose_desired_list
 
         self.joint_ids = joint_ids
         self.fksolver = fksolver
         self.with_base = with_base
 
+        self.with_rot_list = []
+        rank = 0
+        for pose_desired in self.pose_desired_list:
+            with_rot = (len(pose_desired) == 6)
+            self.with_rot_list.append(with_rot)
+            rank += len(pose_desired)
+        self.rank = rank
+
     def gen_func(self):
         n_dof_all = self.n_dof * self.n_wp
+        coords_ids = self.fksolver.get_link_ids(self.coords_name_list)
+        pose_vector_desired = np.hstack(self.pose_desired_list)
 
-        coords_ids = self.fksolver.get_link_ids([self.coords_name])
         def func(av_seq):
             J_whole = np.zeros((self.rank, n_dof_all))
-            P, J = self.fksolver.solve_forward_kinematics(
-                    [av_seq[self.idx_wp]], coords_ids, self.joint_ids,
-                    with_rot=self.with_rot, with_base=self.with_base, with_jacobian=True) 
-            J_whole[:, self.n_dof*self.idx_wp:self.n_dof*(self.idx_wp+1)] = J
-            return (P - self.pose_desired).flatten(), J_whole
+            P_list = []
+            J_list = []
+
+            for coords_id, with_rot in zip(coords_ids, self.with_rot_list):
+                self.fksolver.clear_cache() # because we set use_cache=True
+                P, J = self.fksolver.solve_forward_kinematics(
+                        [av_seq[self.idx_wp]], [coords_id], self.joint_ids,
+                        with_rot=with_rot, with_base=self.with_base, with_jacobian=True, use_cache=True) 
+                P_list.append(P[0])
+                J_list.append(J)
+            pose_vector_now = np.hstack(P_list)
+            J_part = np.vstack(J_list)
+            J_whole[:, self.n_dof*self.idx_wp:self.n_dof*(self.idx_wp+1)] = J_part
+            return (pose_vector_now - pose_vector_desired).flatten(), J_whole
         self._check_func(func)
         return func
 
     def satisfying_angle_vector(self, av_init=None, option=None):
         if option is None:
             option = {"maxitr": 200, "ftol": 1e-4, "sr_weight":1.0}
-        coords_id = self.fksolver.get_link_ids([self.coords_name])[0]
+        coords_ids = self.fksolver.get_link_ids(self.coords_name_list)
         if av_init is None:
             n_dof = len(self.joint_ids) + (3 if self.with_base else 0)
             av_init = np.zeros(n_dof)
-        av_solved = self.fksolver.solve_inverse_kinematics(self.pose_desired, av_init, coords_id,
+
+        av_solved = self.fksolver.solve_multi_endeffector_inverse_kinematics(
+                self.pose_desired_list, av_init, coords_ids,
                 self.joint_ids, with_base=self.with_base, option=option, ignore_fail=True)
         return av_solved
+
+def listify_if_not_list(something):
+    if isinstance(something, list):
+        return something
+    return [something]
 
 # give a problem specification
 class ConstraintManager(object):
@@ -110,9 +132,15 @@ class ConstraintManager(object):
         constraint = ConfigurationConstraint(self.n_wp, self.n_dof, idx_wp, av_desired)
         self._add_constraint(idx_wp, constraint, force)
 
+    def add_multi_pose_constraint(self, idx_wp, coords_name_list, pose_desired_list, force=False):
+        constraint = PoseConstraint(self.n_wp, self.n_dof, idx_wp,
+                coords_name_list, pose_desired_list,
+                self.fksolver, self.joint_ids, self.with_base)
+        self._add_constraint(idx_wp, constraint, force)
+
     def add_pose_constraint(self, idx_wp, coords_name, pose_desired, force=False):
         constraint = PoseConstraint(self.n_wp, self.n_dof, idx_wp,
-                coords_name, pose_desired,
+                [coords_name], [pose_desired],
                 self.fksolver, self.joint_ids, self.with_base)
         self._add_constraint(idx_wp, constraint, force)
 
