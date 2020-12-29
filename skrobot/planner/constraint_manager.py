@@ -90,7 +90,7 @@ class PoseConstraint(EqualityConstraint):
             n_dof = len(self.joint_ids) + (3 if self.with_base else 0)
             av_init = np.zeros(n_dof)
         av_solved = self.fksolver.solve_inverse_kinematics(self.pose_desired, av_init, coords_id,
-                self.joint_ids, self.with_rot, self.with_base, option=option, ignore_fail=True)
+                self.joint_ids, with_base=self.with_base, option=option, ignore_fail=True)
         return av_solved
 
 # give a problem specification
@@ -145,3 +145,6 @@ class ConstraintManager(object):
         initial_trajectory = np.array(
             [av_start + i * regular_interval for i in range(self.n_wp)])
         return initial_trajectory
+
+    def clear_constraint(self):
+        self.constraint_table = {}

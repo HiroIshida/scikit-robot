@@ -118,3 +118,12 @@ class TestConstraintManager(unittest.TestCase):
         f, _ = fun_eq(dummy_av_seq)
         testing.assert_equal(f, f_expected)
         jacobian_test_util(fun_eq, dummy_av_seq)
+
+    def test_add_pose_constraint(self):
+        # TODO must be deepcopied
+        cm, n_wp, n_dof = copy.copy(self.cm), self.n_wp, self.n_dof
+        cm.clear_constraint()
+
+        cm.add_pose_constraint(0, "r_gripper_tool_frame", [0.8, -0.6, 0.8])
+        cm.add_pose_constraint(n_wp-1, "r_gripper_tool_frame", [0.8, -0.6, 0.8, 0, 0, 0])
+        init = cm.gen_initial_trajectory()
