@@ -8,8 +8,8 @@ import numpy as np
 import pysdfgen
 from scipy.interpolate import RegularGridInterpolator
 from skrobot.coordinates import CascadedCoords
-from skrobot.coordinates import Transform
 from skrobot.coordinates import make_cascoords
+from skrobot.coordinates import Transform
 from skrobot.utils.urdf import get_filename
 
 logger = getLogger(__name__)
