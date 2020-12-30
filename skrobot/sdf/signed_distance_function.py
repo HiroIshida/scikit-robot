@@ -9,8 +9,60 @@ import pysdfgen
 from scipy.interpolate import RegularGridInterpolator
 from skrobot.coordinates import CascadedCoords
 from skrobot.coordinates import Transform
+from skrobot.coordinates import make_cascoords
+from skrobot.utils.urdf import get_filename
 
 logger = getLogger(__name__)
+
+
+def link2sdf(link, urdf_path, dim_grid=30):
+    """convert Link to corresponding sdf
+
+    Parameters
+    -------
+    link : skrobot.model.Link
+        link object
+    urdf_path : str
+        urdf path of the robot model that the link belongs to
+    dim_grid : int
+        dimension of the GridSDF
+
+    Returns
+    -------
+    sdf : skrobot.sdf.SignedDistanceFunction
+        corresponding signed distance function to the link type.
+        e.g. if Link has geometry of urdf.Box, then BoxSDF is
+        created.
+    """
+
+    def geometry2sdf(geometry):
+        if geometry.mesh:
+            filename_raw = geometry.mesh.filename
+            filename = get_filename(urdf_path, filename_raw)
+            return GridSDF.from_objfile(filename, dim_grid=dim_grid)
+        elif geometry.box:
+            size = geometry.box.size
+            return BoxSDF([0, 0, 0], size)
+        elif geometry.sphere:
+            radius = geometry.sphere.radius
+            return SphereSDF([0, 0, 0], radius)
+        elif geometry.cylinder:
+            print("cylinder is not supported")
+            raise NotImplementedError
+        else:
+            raise Exception
+
+    sdf_list = []
+    for col in link.urdf_link.collisions:
+        rotation_matrix = col.origin[:3, :3]
+        translation = col.origin[:3, 3]
+
+        geometry = col.geometry
+        sdf = geometry2sdf(geometry)
+        sdf.coords = make_cascoords(pos=translation, rot=rotation_matrix)
+        link.assoc(sdf.coords, relative_coords=sdf.coords)
+        sdf_list.append(sdf)
+    return sdf_list
 
 
 class SignedDistanceFunction(object):
@@ -173,6 +225,27 @@ class UnionSDF(SignedDistanceFunction):
                             in zip(self.sdf_list, num_list)])
         logicals, sd_vals = self.on_surface(points)
         return points[logicals], sd_vals[logicals]
+
+    @classmethod
+    def from_robot_model(cls, robot_model, dim_grid=50):
+        """Create union sdf from a robot model
+
+        Parameters
+        ----------
+        robot_model : skrobot.model.RobotModel
+            Using the links of the robot_model this creates
+            the UnionSDF instance.
+
+        Returns
+        -------
+        union_sdf : skrobot.sdf.UnionSDF
+            union sdf of robot_model
+        """
+        sdf_list = []
+        for link in robot_model.link_list:
+            sdf_sublist = link2sdf(link, robot_model.urdf_path, dim_grid=50)
+            sdf_list.extend(sdf_sublist)
+        return cls(sdf_list)
 
 
 class BoxSDF(SignedDistanceFunction):
