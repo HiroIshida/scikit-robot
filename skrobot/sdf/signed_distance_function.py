@@ -47,6 +47,9 @@ def link2sdf(link, urdf_path, dim_grid=30):
             radius = geometry.sphere.radius
             return SphereSDF([0, 0, 0], radius)
         elif geometry.cylinder:
+            radius = geometry.cylinder.radius
+            length = geometry.cylinder.length
+            return CylinderSDF([0, 0, 0], radius=radius, height=length)
             print("cylinder is not supported")
             raise NotImplementedError
         else:
