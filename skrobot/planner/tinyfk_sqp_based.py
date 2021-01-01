@@ -43,12 +43,17 @@ def tinyfk_sqp_inverse_kinematics(
         return cost, grad
 
     f, jac = scipinize(fun_objective)
+    ineq_const_scipy, ineq_const_jac_scipy = scipinize(collision_ineq_fun)
+    ineq_dict = {'type': 'ineq', 'fun': ineq_const_scipy,
+                 'jac': ineq_const_jac_scipy}
+
     tmp = np.array(joint_limit_list)
     lower_limit, uppre_limit = tmp[:, 0], tmp[:, 1]
     bounds = list(zip(lower_limit, uppre_limit))
     slsqp_option = {'ftol': 1e-5, 'disp': True, 'maxiter': 100}
     res = scipy.optimize.minimize(
-        f, av_guess, method='SLSQP', jac=jac, bounds=bounds, options=slsqp_option)
+        f, av_guess, method='SLSQP',
+        jac=jac, bounds=bounds, options=slsqp_option, constraints=[ineq_dict])
     return res.x
 
 
