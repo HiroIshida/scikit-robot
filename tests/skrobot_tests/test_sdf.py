@@ -7,6 +7,7 @@ import unittest
 
 import skrobot
 from skrobot.sdf import BoxSDF
+from skrobot.sdf import CylinderSDF
 from skrobot.sdf import GridSDF
 from skrobot.sdf import SphereSDF
 from skrobot.sdf import UnionSDF
@@ -43,8 +44,11 @@ class TestSDF(unittest.TestCase):
 
         # prepare SphereSDF
         radius = 1.0
+        height = 1.0
         cls.radius = radius
+        cls.height = height
         cls.sphere_sdf = SphereSDF([0, 0, 0], radius=radius)
+        cls.cylinder_sdf = CylinderSDF([0, 0, 0], radius=radius, height=height)
 
         # preapare UnionSDF
         unionsdf = UnionSDF(sdf_list=[boxsdf, gridsdf])
@@ -75,6 +79,29 @@ class TestSDF(unittest.TestCase):
 
     def test_sphere__surface_points(self):
         sdf = self.sphere_sdf
+        ray_tips, sd_vals = sdf._surface_points()
+        testing.assert_array_equal(sdf._signed_distance(ray_tips), sd_vals)
+        self.assertTrue(np.all(np.abs(sd_vals) < sdf._surface_threshold))
+
+    def test_cylinder__signed_distance(self):
+        sdf, radius, height = self.cylinder_sdf, self.radius, self.height
+        half_height = height * 0.5
+        pts_on_surface = np.array([
+            [0, 0, half_height],
+            [radius, 0, half_height],
+            [radius, 0, half_height],
+            [radius, 0, 0],
+            [0, 0, -half_height],
+            [radius, 0, -half_height],
+            [radius, 0, -half_height]
+        ])
+        testing.assert_almost_equal(sdf(pts_on_surface),
+                                    np.zeros(len(pts_on_surface)))
+        self.assertEqual(sdf(np.zeros((1, 3))).item(),
+                         -min(radius, half_height))
+
+    def test_cylinder__surface_points(self):
+        sdf = self.cylinder_sdf
         ray_tips, sd_vals = sdf._surface_points()
         testing.assert_array_equal(sdf._signed_distance(ray_tips), sd_vals)
         self.assertTrue(np.all(np.abs(sd_vals) < sdf._surface_threshold))
@@ -184,3 +211,31 @@ class TestSDF(unittest.TestCase):
 
         cond_and = (sum(on_surface1) > 0) and (sum(on_surface2) > 0)
         self.assertTrue(cond_and)  # each surface has at least a single points
+
+    def test_union_sdf_from_robot_model(self):
+        r2d2 = skrobot.models.urdf.RobotModelFromURDF(
+            urdf_file=skrobot.data.r2d2_urdfpath())
+        r2d2_union_sdf = UnionSDF.from_robot_model(r2d2)
+        for link in r2d2.link_list:
+            coll_mesh = link._collision_mesh
+            vertices = link.transform_vector(coll_mesh.vertices)
+            sd_vals = r2d2_union_sdf(vertices)
+            self.assertTrue(np.all(sd_vals < 1e-3))
+
+        fetch = skrobot.models.Fetch()
+        fetch.reset_manip_pose()
+        # this a takes
+        fetch_union_sdf = UnionSDF.from_robot_model(fetch)
+
+        # check if the vertices of the links have almost 0 sd vals.
+        gripper_link = fetch.gripper_link
+        coll_mesh = gripper_link._collision_mesh
+        vertices = gripper_link.transform_vector(coll_mesh.vertices)
+        sd_vals = fetch_union_sdf(vertices)
+        self.assertTrue(np.all(sd_vals < 1e-3))
+
+        finger_link = fetch.r_gripper_finger_link
+        coll_mesh = finger_link._collision_mesh
+        vertices = finger_link.transform_vector(coll_mesh.vertices)
+        sd_vals = fetch_union_sdf(vertices)
+        self.assertTrue(np.all(sd_vals < 1e-3))

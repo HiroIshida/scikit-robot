@@ -8,9 +8,64 @@ import numpy as np
 import pysdfgen
 from scipy.interpolate import RegularGridInterpolator
 from skrobot.coordinates import CascadedCoords
+from skrobot.coordinates import make_cascoords
 from skrobot.coordinates import Transform
+from skrobot.utils.urdf import get_filename
 
 logger = getLogger(__name__)
+
+
+def link2sdf(link, urdf_path, dim_grid=30):
+    """convert Link to corresponding sdf
+
+    Parameters
+    -------
+    link : skrobot.model.Link
+        link object
+    urdf_path : str
+        urdf path of the robot model that the link belongs to
+    dim_grid : int
+        dimension of the GridSDF
+
+    Returns
+    -------
+    sdf : skrobot.sdf.SignedDistanceFunction
+        corresponding signed distance function to the link type.
+        e.g. if Link has geometry of urdf.Box, then BoxSDF is
+        created.
+    """
+
+    def geometry2sdf(geometry):
+        if geometry.mesh:
+            filename_raw = geometry.mesh.filename
+            filename = get_filename(urdf_path, filename_raw)
+            return GridSDF.from_objfile(filename, dim_grid=dim_grid)
+        elif geometry.box:
+            size = geometry.box.size
+            return BoxSDF([0, 0, 0], size)
+        elif geometry.sphere:
+            radius = geometry.sphere.radius
+            return SphereSDF([0, 0, 0], radius)
+        elif geometry.cylinder:
+            radius = geometry.cylinder.radius
+            length = geometry.cylinder.length
+            return CylinderSDF([0, 0, 0], radius=radius, height=length)
+            print("cylinder is not supported")
+            raise NotImplementedError
+        else:
+            raise Exception
+
+    sdf_list = []
+    for col in link.urdf_link.collisions:
+        rotation_matrix = col.origin[:3, :3]
+        translation = col.origin[:3, 3]
+
+        geometry = col.geometry
+        sdf = geometry2sdf(geometry)
+        sdf.coords = make_cascoords(pos=translation, rot=rotation_matrix)
+        link.assoc(sdf.coords, relative_coords=sdf.coords)
+        sdf_list.append(sdf)
+    return sdf_list
 
 
 class SignedDistanceFunction(object):
@@ -174,6 +229,27 @@ class UnionSDF(SignedDistanceFunction):
         logicals, sd_vals = self.on_surface(points)
         return points[logicals], sd_vals[logicals]
 
+    @classmethod
+    def from_robot_model(cls, robot_model, dim_grid=50):
+        """Create union sdf from a robot model
+
+        Parameters
+        ----------
+        robot_model : skrobot.model.RobotModel
+            Using the links of the robot_model this creates
+            the UnionSDF instance.
+
+        Returns
+        -------
+        union_sdf : skrobot.sdf.UnionSDF
+            union sdf of robot_model
+        """
+        sdf_list = []
+        for link in robot_model.link_list:
+            sdf_sublist = link2sdf(link, robot_model.urdf_path, dim_grid=50)
+            sdf_list.extend(sdf_sublist)
+        return cls(sdf_list)
+
 
 class BoxSDF(SignedDistanceFunction):
     """SDF for a box specified by `origin` and `width`."""
@@ -223,6 +299,52 @@ class SphereSDF(SignedDistanceFunction):
         diffs = points_sdf - c[None, :]
         dists_from_origin = np.sqrt(np.sum(diffs**2, axis=1))
         sd_vals = dists_from_origin - self._radius
+        return sd_vals
+
+    def _surface_points(self, n_sample=1000):
+        # surface points by raymarching
+        vecs = np.random.randn(n_sample, 3)
+        ray_tips = np.zeros((n_sample, 3))
+        return ray_marching(ray_tips, vecs,
+                            self._signed_distance,
+                            self._surface_threshold)
+
+
+class CylinderSDF(SignedDistanceFunction):
+    """SDF for a cylinder specified by `origin`,`radius` and `height`"""
+
+    def __init__(self, origin, height, radius, coords=None, use_abs=False):
+        super(CylinderSDF, self).__init__(origin,
+                                          coords=coords, use_abs=use_abs)
+        self._height = height
+        self._radius = radius
+        self._surface_threshold = min(radius, height) * 1e-2
+
+    def _signed_distance(self, points_sdf):
+        n_pts, _ = points_sdf.shape
+        c = self._origin
+        height_half = 0.5 * self._height
+
+        pts_from_center_3d = points_sdf - c[None, :]
+        radius_from_center = np.sqrt(
+            pts_from_center_3d[:, 0]**2 + pts_from_center_3d[:, 1]**2)
+        height_from_center = pts_from_center_3d[:, 2]
+
+        # Now the problem is reduced to 2 dim [radius, height] box sdf
+        # so the algorithm from now is the same as the box sdf computation
+        half_extent_2d = np.array([self._radius, height_half])
+        pts_from_center_2d = np.vstack(
+            [radius_from_center, height_from_center]).T
+        sd_vals_each_axis = np.abs(pts_from_center_2d)\
+            - half_extent_2d[None, :]
+
+        positive_dists_each_axis = np.maximum(sd_vals_each_axis, 0.0)
+        positive_dists = np.sqrt(np.sum(positive_dists_each_axis**2, axis=1))
+
+        negative_dists_each_axis = np.max(sd_vals_each_axis, axis=1)
+        negative_dists = np.minimum(negative_dists_each_axis, 0.0)
+
+        sd_vals = positive_dists + negative_dists
         return sd_vals
 
     def _surface_points(self, n_sample=1000):
