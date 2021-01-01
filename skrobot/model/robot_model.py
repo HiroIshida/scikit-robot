@@ -7,6 +7,7 @@ import numpy.linalg as LA
 from ordered_set import OrderedSet
 import six
 import trimesh
+import tinyfk
 
 from skrobot.coordinates import _wrap_axis
 from skrobot.coordinates import CascadedCoords
@@ -1636,6 +1637,7 @@ class RobotModel(CascadedLink):
         for joint in joint_list:
             self.__dict__[joint.name] = joint
         self.urdf_path = None
+        self.fksolver = None
 
         self._relevance_predicate_table = \
             self._compute_relevance_predicate_table()
@@ -1660,6 +1662,8 @@ class RobotModel(CascadedLink):
             self.urdf_path = file_obj
         else:
             self.urdf_path = getattr(file_obj, 'name', None)
+
+        self.fksolver = tinyfk.RobotModel(self.urdf_path)
         self.urdf_robot_model = URDF.load(file_obj=file_obj)
         root_link = self.urdf_robot_model.base_link
 

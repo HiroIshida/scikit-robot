@@ -1,5 +1,3 @@
-import tinyfk
-
 from skrobot.planner import SweptSphereSdfCollisionChecker
 
 
@@ -9,7 +7,7 @@ class TinyfkSweptSphereSdfCollisionChecker(SweptSphereSdfCollisionChecker):
     def __init__(self, sdf, robot_model):
         super(TinyfkSweptSphereSdfCollisionChecker, self).__init__(
             sdf, robot_model)
-        self.fksolver = tinyfk.RobotModel(robot_model.urdf_path)
+        self.fksolver = robot_model.fksolver
         self.coll_sphere_id_list = []
 
     def add_collision_link(self, coll_link):
