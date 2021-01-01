@@ -28,10 +28,13 @@ class Link(CascadedCoords):
 
     @classmethod
     def from_urdf_link(cls, urdf_link):
+        visual_mesh = _meshes_from_urdf_visuals(urdf_link.visuals)
+        if len(visual_mesh) > 1:
+            visual_mesh = [trimesh.boolean.union(visual_mesh)]
         return cls(
             name=urdf_link.name,
             collision_mesh=urdf_link.collision_mesh,
-            visual_mesh=_meshes_from_urdf_visuals(urdf_link.visuals),
+            visual_mesh=visual_mesh,
             urdf_link=urdf_link)
 
     @property
