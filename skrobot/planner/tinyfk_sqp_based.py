@@ -4,17 +4,23 @@ import scipy
 from skrobot.planner.sqp_based import _sqp_based_trajectory_optimization
 from skrobot.planner.utils import scipinize
 from skrobot.planner.utils import update_fksolver
+from skrobot.utils.listify import listify
 
 def tinyfk_sqp_inverse_kinematics(
-        coords_name,
-        target_pose,
+        coords_name_list,
+        target_pose_list,
         av_guess,     
         joint_list,
         collision_checker,
         safety_margin=1e-2,
         with_base=False):
 
-    with_rot = (len(target_pose)==6)
+    fksolver = collision_checker.fksolver
+    coords_name_list = listify(coords_name_list)
+    target_pose_list = listify(target_pose_list)
+    assert len(coords_name_list) == len(target_pose_list)
+
+    with_rot_list = [len(tp)==6 for tp in target_pose_list]
 
     joint_limit_list = [[j.min_angle, j.max_angle] for j in joint_list]
     if with_base:
@@ -22,7 +28,7 @@ def tinyfk_sqp_inverse_kinematics(
     n_dof = len(joint_list) + (3 if with_base else 0)
 
     joint_name_list = [j.name for j in joint_list]
-    joint_ids = collision_checker.fksolver.get_joint_ids(joint_name_list)
+    joint_ids = fksolver.get_joint_ids(joint_name_list)
 
     def collision_ineq_fun(av):
         with_jacobian = True
@@ -32,15 +38,21 @@ def tinyfk_sqp_inverse_kinematics(
         sd_vals_margined = sd_vals - safety_margin
         return sd_vals_margined, sd_val_jac
 
-    end_link_ids = collision_checker.fksolver.get_link_ids([coords_name])
-
+    elink_ids = fksolver.get_link_ids(coords_name_list)
     def fun_objective(av):
-        P, J = collision_checker.fksolver.solve_forward_kinematics(
-                [av], end_link_ids, joint_ids, with_rot, with_base, True)
-        diff = (target_pose - P[0])
-        cost = np.sum(diff**2)
-        grad = -2 * diff.dot(J)
-        return cost, grad
+        cost_whole = 0.0
+        grad_whole = np.zeros(n_dof)
+        fksolver.clear_cache() # because we set use_cache=True
+        for target_pose, elink_id, with_rot in zip(target_pose_list, elink_ids, with_rot_list):
+            P, J = fksolver.solve_forward_kinematics(
+                    [av], [elink_id], joint_ids, with_rot, with_base, True, use_cache=True)
+            pose_diff = (target_pose - P[0])
+            cost = np.sum(pose_diff**2)
+            grad = -2 * pose_diff.dot(J)
+
+            cost_whole += cost
+            grad_whole += grad
+        return cost_whole, grad_whole
 
     f, jac = scipinize(fun_objective)
     ineq_const_scipy, ineq_const_jac_scipy = scipinize(collision_ineq_fun)
