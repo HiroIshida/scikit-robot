@@ -11,11 +11,11 @@ def tinyfk_sqp_inverse_kinematics(
         target_pose_list,
         av_guess,     
         joint_list,
-        collision_checker,
+        fksolver,
+        collision_checker=None,
         safety_margin=1e-2,
         with_base=False):
 
-    fksolver = collision_checker.fksolver
     coords_name_list = listify(coords_name_list)
     target_pose_list = listify(target_pose_list)
     assert len(coords_name_list) == len(target_pose_list)
@@ -30,14 +30,23 @@ def tinyfk_sqp_inverse_kinematics(
     joint_name_list = [j.name for j in joint_list]
     joint_ids = fksolver.get_joint_ids(joint_name_list)
 
-    def collision_ineq_fun(av):
-        with_jacobian = True
-        sd_vals, sd_val_jac = collision_checker._compute_batch_sd_vals(
-            joint_ids, av.reshape(1, -1),
-            with_base=with_base, with_jacobian=with_jacobian)
-        sd_vals_margined = sd_vals - safety_margin
-        return sd_vals_margined, sd_val_jac
+    # Construct constraints
+    if collision_checker is not None:
+        def collision_ineq_fun(av):
+            with_jacobian = True
+            sd_vals, sd_val_jac = collision_checker._compute_batch_sd_vals(
+                joint_ids, av.reshape(1, -1),
+                with_base=with_base, with_jacobian=with_jacobian)
+            sd_vals_margined = sd_vals - safety_margin
+            return sd_vals_margined, sd_val_jac
+        ineq_const_scipy, ineq_const_jac_scipy = scipinize(collision_ineq_fun)
+        ineq_dict = {'type': 'ineq', 'fun': ineq_const_scipy,
+                     'jac': ineq_const_jac_scipy}
+        constraints = [ineq_dict]
+    else:
+        constraints = []
 
+    # construct objective function
     elink_ids = fksolver.get_link_ids(coords_name_list)
     def fun_objective(av):
         cost_whole = 0.0
@@ -53,11 +62,7 @@ def tinyfk_sqp_inverse_kinematics(
             cost_whole += cost
             grad_whole += grad
         return cost_whole, grad_whole
-
     f, jac = scipinize(fun_objective)
-    ineq_const_scipy, ineq_const_jac_scipy = scipinize(collision_ineq_fun)
-    ineq_dict = {'type': 'ineq', 'fun': ineq_const_scipy,
-                 'jac': ineq_const_jac_scipy}
 
     tmp = np.array(joint_limit_list)
     lower_limit, uppre_limit = tmp[:, 0], tmp[:, 1]
@@ -65,7 +70,7 @@ def tinyfk_sqp_inverse_kinematics(
     slsqp_option = {'ftol': 1e-5, 'disp': True, 'maxiter': 100}
     res = scipy.optimize.minimize(
         f, av_guess, method='SLSQP',
-        jac=jac, bounds=bounds, options=slsqp_option, constraints=[ineq_dict])
+        jac=jac, bounds=bounds, options=slsqp_option, constraints=constraints)
     return res.x
 
 

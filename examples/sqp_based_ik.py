@@ -54,7 +54,8 @@ coords_list = ["r_gripper_tool_frame", "l_gripper_tool_frame"]
 
 av_init = get_robot_config(robot_model, joint_list, with_base=True)
 ts = time.time()
-av_sol = tinyfk_sqp_inverse_kinematics(coords_list, target_pose_list, av_init, joint_list, sscc, with_base=True)
+fksolver = robot_model.fksolver
+av_sol = tinyfk_sqp_inverse_kinematics(coords_list, target_pose_list, av_init, joint_list, fksolver, sscc, with_base=True)
 print(time.time() - ts)
 
 set_robot_config(robot_model, joint_list, av_sol, with_base=True)
