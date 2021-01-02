@@ -14,6 +14,7 @@ def tinyfk_sqp_inverse_kinematics(
         fksolver,
         collision_checker=None,
         safety_margin=1e-2,
+        strategy="multi",
         with_base=False):
 
     coords_name_list = listify(coords_name_list)
@@ -68,10 +69,27 @@ def tinyfk_sqp_inverse_kinematics(
     lower_limit, uppre_limit = tmp[:, 0], tmp[:, 1]
     bounds = list(zip(lower_limit, uppre_limit))
     slsqp_option = {'ftol': 1e-5, 'disp': True, 'maxiter': 100}
-    res = scipy.optimize.minimize(
-        f, av_guess, method='SLSQP',
-        jac=jac, bounds=bounds, options=slsqp_option, constraints=constraints)
-    return res.x
+    if strategy=="multi":
+        assert len(target_pose_list)==1
+        assert with_base
+        pose = target_pose_list[0][:3]
+        base_pose_nominal = np.array([pose[0], pose[1], 0.0])
+        while True:
+            av_guess[-3:] = base_pose_nominal + np.random.randn(3)
+            res = scipy.optimize.minimize(
+                f, av_guess, method='SLSQP',
+                jac=jac, bounds=bounds, options=slsqp_option, constraints=constraints)
+            if res.fun < 0.001:
+                print("solved")
+                break
+            print("solve failed... retry")
+        return res.x
+
+    else:
+        res = scipy.optimize.minimize(
+            f, av_guess, method='SLSQP',
+            jac=jac, bounds=bounds, options=slsqp_option, constraints=constraints)
+        return res.x
 
 
 def tinyfk_sqp_plan_trajectory(collision_checker,
