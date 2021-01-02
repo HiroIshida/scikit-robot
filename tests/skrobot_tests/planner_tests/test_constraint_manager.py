@@ -35,12 +35,13 @@ class TestConstraintManager(unittest.TestCase):
     @classmethod
     def setup_class(cls):
         n_wp = 5
-        urdf_path = skrobot.data.pr2_urdfpath()
-        fksolver = tinyfk.RobotModel(urdf_path)
+        robot_model = skrobot.models.PR2()
+        fksolver = robot_model.fksolver
         joint_names = ["r_shoulder_pan_joint", "r_shoulder_lift_joint", "r_upper_arm_roll_joint", "r_elbow_flex_joint", "r_forearm_roll_joint", "r_wrist_flex_joint", "r_wrist_roll_joint"]
+        joint_list = [robot_model.__dict__[n] for n in joint_names]
 
         n_dof = len(joint_names) + 3
-        cm = ConstraintManager(n_wp, joint_names, fksolver, True)
+        cm = ConstraintManager(n_wp, joint_list, fksolver, True)
 
         cls.n_wp = n_wp
         cls.n_dof = n_dof
@@ -87,7 +88,7 @@ class TestConstraintManager(unittest.TestCase):
         position_desired = np.array([0.8, -0.6, 0.7, 0, 0, 0])
         with_base = True
         cons = PoseConstraint(n_wp, n_dof, 2, ["r_gripper_tool_frame"], [position_desired],
-                cm.fksolver, cm.joint_ids, with_base)
+                cm.fksolver, cm.joint_list, with_base)
         func = cons.gen_func()
         # TODO test generated function
         dummy_av_seq = np.random.randn(n_wp, n_dof) 

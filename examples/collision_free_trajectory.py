@@ -62,12 +62,12 @@ for link in coll_link_list:
 # constraint manager
 n_wp = 10
 fksolver = sscc.fksolver # TODO temporary
-cm = ConstraintManager(n_wp, [j.name for j in joint_list], fksolver, with_base)
+cm = ConstraintManager(n_wp, joint_list, fksolver, with_base)
 cm.add_eq_configuration(0, av_start)
 cm.add_pose_constraint(n_wp-1, "r_gripper_tool_frame", [0.75, -0.6, 0.8])
 
 av_current = get_robot_config(robot_model, joint_list, with_base=with_base)
-av_seq_init = cm.gen_initial_trajectory(av_current)
+av_seq_init = cm.gen_initial_trajectory(av_init=av_current, collision_checker=sscc)
 
 
 # motion planning

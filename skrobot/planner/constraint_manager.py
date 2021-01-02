@@ -1,5 +1,6 @@
 import uuid
 import numpy as np
+from skrobot.planner import tinyfk_sqp_inverse_kinematics
 
 # TODO check added eq_configuration is valid by pre-solving collision checking
 
@@ -46,12 +47,12 @@ class ConfigurationConstraint(EqualityConstraint):
         self._check_func(func)
         return func
 
-    def satisfying_angle_vector(self, av_init=None):
+    def satisfying_angle_vector(self, **kwargs):
         return self.av_desired
 
 class PoseConstraint(EqualityConstraint):
     def __init__(self, n_wp, n_dof, idx_wp, coords_name_list, pose_desired_list, 
-            fksolver, joint_ids, with_base,
+            fksolver, joint_list, with_base,
             name=None):
         # here pose order is [x, y, z, r, p, y]
         if name is None:
@@ -61,7 +62,8 @@ class PoseConstraint(EqualityConstraint):
         self.coords_name_list = coords_name_list
         self.pose_desired_list = pose_desired_list
 
-        self.joint_ids = joint_ids
+        self.joint_list = joint_list
+        self.joint_ids = fksolver.get_joint_ids([j.name for j in joint_list])
         self.fksolver = fksolver
         self.with_base = with_base
 
@@ -97,17 +99,27 @@ class PoseConstraint(EqualityConstraint):
         self._check_func(func)
         return func
 
-    def satisfying_angle_vector(self, av_init=None, option=None):
-        if option is None:
+    def satisfying_angle_vector(self, **kwargs):
+        if "option" in kwargs:
+            option = kwargs["option"]
+        else:
             option = {"maxitr": 200, "ftol": 1e-4, "sr_weight":1.0}
-        coords_ids = self.fksolver.get_link_ids(self.coords_name_list)
-        if av_init is None:
-            n_dof = len(self.joint_ids) + (3 if self.with_base else 0)
+
+        if "av_init" in kwargs:
+            av_init = kwargs["av_init"]
+        else:
+            n_dof = len(self.joint_list) + (3 if self.with_base else 0)
             av_init = np.zeros(n_dof)
 
-        av_solved = self.fksolver.solve_multi_endeffector_inverse_kinematics(
-                self.pose_desired_list, av_init, coords_ids,
-                self.joint_ids, with_base=self.with_base, option=option, ignore_fail=True)
+        if "collision_checker" in kwargs:
+            collision_checker = kwargs["collision_checker"]
+        else:
+            collision_checker = None
+
+        coords_ids = self.fksolver.get_link_ids(self.coords_name_list)
+        av_solved = tinyfk_sqp_inverse_kinematics(
+            self.coords_name_list, self.pose_desired_list, av_init, self.joint_list,
+            self.fksolver, collision_checker, with_base=self.with_base)
         return av_solved
 
 def listify_if_not_list(something):
@@ -117,14 +129,13 @@ def listify_if_not_list(something):
 
 # give a problem specification
 class ConstraintManager(object):
-    def __init__(self, n_wp, joint_names, fksolver, with_base): 
+    def __init__(self, n_wp, joint_list, fksolver, with_base): 
         # must be with_base=True now
         self.n_wp = n_wp
-        n_dof = len(joint_names) + (3 if with_base else 0)
+        n_dof = len(joint_list) + (3 if with_base else 0)
         self.n_dof = n_dof
         self.constraint_table = {}
-
-        self.joint_ids = fksolver.get_joint_ids(joint_names)
+        self.joint_list = joint_list
         self.fksolver = fksolver
         self.with_base = with_base
 
@@ -135,13 +146,13 @@ class ConstraintManager(object):
     def add_multi_pose_constraint(self, idx_wp, coords_name_list, pose_desired_list, force=False):
         constraint = PoseConstraint(self.n_wp, self.n_dof, idx_wp,
                 coords_name_list, pose_desired_list,
-                self.fksolver, self.joint_ids, self.with_base)
+                self.fksolver, self.joint_list, self.with_base)
         self._add_constraint(idx_wp, constraint, force)
 
     def add_pose_constraint(self, idx_wp, coords_name, pose_desired, force=False):
         constraint = PoseConstraint(self.n_wp, self.n_dof, idx_wp,
                 [coords_name], [pose_desired],
-                self.fksolver, self.joint_ids, self.with_base)
+                self.fksolver, self.joint_list, self.with_base)
         self._add_constraint(idx_wp, constraint, force)
 
     def _add_constraint(self, idx_wp, constraint, force):
@@ -165,9 +176,9 @@ class ConstraintManager(object):
             return np.hstack(f_list), np.vstack(jac_list)
         return func_combined
 
-    def gen_initial_trajectory(self, av_current=None):
-        av_start = self.constraint_table[0].satisfying_angle_vector(av_init=av_current)
-        av_goal = self.constraint_table[self.n_wp-1].satisfying_angle_vector(av_init=av_current)
+    def gen_initial_trajectory(self, **kwargs):
+        av_start = self.constraint_table[0].satisfying_angle_vector(**kwargs)
+        av_goal = self.constraint_table[self.n_wp-1].satisfying_angle_vector(**kwargs)
 
         regular_interval = (av_goal - av_start) / (self.n_wp - 1)
         initial_trajectory = np.array(
