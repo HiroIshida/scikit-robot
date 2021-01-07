@@ -15,7 +15,7 @@ class SweptSphereSdfCollisionChecker(object):
     """Collision checker between swept spheres and sdf"""
 
     def __init__(self, sdf, robot_model):
-        self.sdf = sdf
+        self.set_sdf(sdf)
         self.robot_model = robot_model
 
         self.coll_link_name_list = []
@@ -23,10 +23,13 @@ class SweptSphereSdfCollisionChecker(object):
         self.coll_radius_list = []
         self.coll_coords_list = []
         self.n_feature = 0
-        self.time_dep = isinstance(self.sdf, list)
 
         self.color_normal_sphere = [250, 250, 10, 200]
         self.color_collision_sphere = [255, 0, 0, 200]
+
+    def set_sdf(self, sdf):
+        self.sdf = sdf
+        self.time_dep = isinstance(sdf, list)
 
     def add_coll_spheres_to_viewer(self, viewer):
         """Add collision sheres to viewer
