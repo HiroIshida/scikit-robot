@@ -136,11 +136,11 @@ def tinyfk_sqp_plan_trajectory(collision_checker,
         sd_vals_margined = sd_vals - safety_margin
         return sd_vals_margined, sd_val_jac
 
-    optimal_trajectory = _sqp_based_trajectory_optimization(
+    res = _sqp_based_trajectory_optimization(
         initial_trajectory,
         collision_ineq_fun,
         constraint_manager.gen_combined_constraint_func(),
         joint_limit_list,
         weights,
         slsqp_option)
-    return optimal_trajectory
+    return res

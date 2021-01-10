@@ -131,8 +131,8 @@ def _sqp_based_trajectory_optimization(
         bounds=bounds,
         constraints=[eq_dict, ineq_dict],
         options=slsqp_option)
-    traj_opt = res.x.reshape(n_wp, n_dof)
-    return traj_opt
+    res.x = res.x.reshape(n_wp, n_dof)
+    return res
 
 
 @lru_cache(maxsize=1000)
