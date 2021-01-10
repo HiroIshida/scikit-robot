@@ -6,6 +6,10 @@ from skrobot.planner.utils import scipinize
 from skrobot.planner.utils import update_fksolver
 from skrobot.utils.listify import listify
 
+
+class InvalidInitConfigException(Exception):
+    pass
+
 def tinyfk_sqp_inverse_kinematics(
         coords_name_list,
         target_pose_list,
@@ -117,6 +121,12 @@ def tinyfk_sqp_plan_trajectory(collision_checker,
 
     joint_name_list = [j.name for j in joint_list]
     joint_ids = collision_checker.fksolver.get_joint_ids(joint_name_list)
+
+    ## check validity of the start angle vector
+    sd_vals_start, _ = collision_checker._compute_batch_sd_vals(
+            joint_ids, np.array([initial_trajectory[0]]), with_base=with_base)
+    if not np.all(sd_vals_start > 1e-3):
+        raise InvalidInitConfigException
 
     def collision_ineq_fun(av_seq):
         with_jacobian = True
