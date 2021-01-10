@@ -510,10 +510,12 @@ class ROSRobotMoveBaseInterface(ROSRobotInterfaceBase):
                     'but move_base_trajectory_action is not found')
                 return False
             self.move_base_trajectory_action.send_goal(goal.goal)
+            """
             if self.move_base_trajectory_action.wait_for_result():
                 return self.move_base_trajectory_action.get_result()
             else:
                 return False
+            """
         return goal
 
     def move_trajectory(self, x, y, yaw, sec=1.0, stop=True,
