@@ -75,6 +75,26 @@ class PoseConstraint(EqualityConstraint):
             rank += len(pose_desired)
         self.rank = rank
 
+    def gen_subfunc(self):
+        # gen_func returns whole trajectory jacobian. but this function returns only sub jacobian
+        coords_ids = self.fksolver.get_link_ids(self.coords_name_list)
+        pose_vector_desired = np.hstack(self.pose_desired_list)
+
+        def func(av):
+            P_list = []
+            J_list = []
+            for coords_id, with_rot in zip(coords_ids, self.with_rot_list):
+                self.fksolver.clear_cache() # because we set use_cache=True
+                P, J = self.fksolver.solve_forward_kinematics(
+                        [av], [coords_id], self.joint_ids,
+                        with_rot=with_rot, with_base=self.with_base, with_jacobian=True, use_cache=True) 
+                P_list.append(P[0])
+                J_list.append(J)
+            pose_vector_now = np.hstack(P_list)
+            J = np.vstack(J_list)
+            return (pose_vector_now - pose_vector_desired).flatten(), J
+        return func
+
     def gen_func(self):
         n_dof_all = self.n_dof * self.n_wp
         coords_ids = self.fksolver.get_link_ids(self.coords_name_list)
