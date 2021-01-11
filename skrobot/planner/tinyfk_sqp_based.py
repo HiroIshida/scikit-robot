@@ -25,9 +25,13 @@ def tinyfk_sqp_inverse_kinematics(
     target_pose_list = listify(target_pose_list)
     assert len(coords_name_list) == len(target_pose_list)
 
+
+    fix_negative_inf = lambda x: -6.28 if x == -np.inf else x
+    fix_positive_inf = lambda x: 6.28 if x == np.inf else x
     with_rot_list = [len(tp)==6 for tp in target_pose_list]
 
-    joint_limit_list = [[j.min_angle, j.max_angle] for j in joint_list]
+    joint_limit_list = [[fix_negative_inf(j.min_angle), fix_positive_inf(j.max_angle)]
+            for j in joint_list]
     if with_base:
         joint_limit_list += [[-np.inf, np.inf]] * 3
     n_dof = len(joint_list) + (3 if with_base else 0)
