@@ -35,15 +35,15 @@ coll_link_list = [
     robot_model.r_gripper_l_finger_link]
 
 # obtain av_start (please try both with_base=True, FalseA)
-with_base = False
+with_base = True # support only with_base now
 av_start = np.array([0.564, 0.35, -0.74, -0.7, -0.7, -0.17, -0.63])
 if with_base:
     av_start = np.hstack([av_start, [0, 0, 0]])
 
 # solve inverse kinematics to obtain av_goal
 coef = 3.1415 / 180.0
-joint_angles = [coef * e for e in [-60, 74, -70, -120, -20, -30, 180]]
-set_robot_config(robot_model, joint_list, joint_angles)
+joint_angles = [coef * e for e in [-60, 74, -70, -120, -20, -30, 180]] + [0, 0, 0]
+set_robot_config(robot_model, joint_list, joint_angles, with_base=True)
 
 rarm_end_coords = skrobot.coordinates.CascadedCoords(
     parent=robot_model.r_gripper_tool_frame,
@@ -72,7 +72,7 @@ av_seq_init = cm.gen_initial_trajectory(av_init=av_current, collision_checker=ss
 
 # motion planning
 ts = time.time()
-av_seq = tinyfk_sqp_plan_trajectory(
+res = tinyfk_sqp_plan_trajectory(
     sscc, cm, av_seq_init, joint_list, n_wp,
     safety_margin=1e-2, with_base=with_base)
 print("solving time : {0} sec".format(time.time() - ts))
@@ -89,6 +89,7 @@ viewer.add(box)
 viewer.add(Axis(pos=[0.8, -0.6, 0.8]))
 sscc.add_coll_spheres_to_viewer(viewer)
 viewer.show()
+av_seq = res.x
 for av in av_seq:
     set_robot_config(robot_model, joint_list, av, with_base=with_base)
     sscc.update_color()
