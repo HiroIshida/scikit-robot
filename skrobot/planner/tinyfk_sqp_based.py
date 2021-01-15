@@ -78,7 +78,6 @@ def tinyfk_sqp_inverse_kinematics(
     bounds = list(zip(lower_limit, uppre_limit))
     slsqp_option = {'ftol': 1e-5, 'disp': True, 'maxiter': 100}
     if strategy=="multi":
-        assert len(target_pose_list)==1
         assert with_base
         pose = target_pose_list[0][:3]
         base_pose_nominal = np.array([pose[0], pose[1], 0.0])
