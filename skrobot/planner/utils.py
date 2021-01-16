@@ -5,6 +5,19 @@ from skrobot.coordinates import Coordinates
 from skrobot.coordinates.math import rpy_angle
 from skrobot.coordinates.math import rpy_matrix
 
+def gen_augumented_av_seq(av_seq):
+    n_points = len(av_seq)
+    n_mid = 5
+    augumented_av_seq = []
+    for i in range(n_points-1):
+        av = av_seq[i]
+        av_next = av_seq[i+1]
+        w = (av_next - av)/(n_mid + 1)
+        for j in range(n_mid+1):
+            augumented_av_seq.append(av + w * j)
+    augumented_av_seq.append(av_seq[-1])
+    return np.vstack(augumented_av_seq)
+
 def update_fksolver(robot_model):
     joint_list = robot_model.joint_list
     joint_names = [j.name for j in joint_list]

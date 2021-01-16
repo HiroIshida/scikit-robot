@@ -1,4 +1,5 @@
 from skrobot.planner import SweptSphereSdfCollisionChecker
+import numpy as np
 
 
 class TinyfkSweptSphereSdfCollisionChecker(SweptSphereSdfCollisionChecker):
@@ -21,6 +22,14 @@ class TinyfkSweptSphereSdfCollisionChecker(SweptSphereSdfCollisionChecker):
 
         sphere_ids = self.fksolver.get_link_ids(sphere_name_list)
         self.coll_sphere_id_list.extend(sphere_ids)
+
+    def check_trajectory(
+            self,
+            joint_list,
+            angle_vector_seq,
+            with_base=False):
+        vals = self.compute_batch_sd_vals(joint_list, angle_vector_seq, with_base=True)
+        return np.all(vals > 0)
 
     def compute_batch_sd_vals(
             self,

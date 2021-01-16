@@ -12,6 +12,7 @@ from skrobot.planner import ConstraintManager
 from skrobot.planner import ConstraintViewer
 from skrobot.planner.utils import get_robot_config
 from skrobot.planner.utils import set_robot_config
+from skrobot.planner.utils import gen_augumented_av_seq
 
 # initialization stuff
 np.random.seed(0)
@@ -74,7 +75,7 @@ av_seq_init = cm.gen_initial_trajectory(av_init=av_current, collision_checker=ss
 ts = time.time()
 res = tinyfk_sqp_plan_trajectory(
     sscc, cm, av_seq_init, joint_list, n_wp,
-    safety_margin=1e-2, with_base=with_base)
+    safety_margin=5e-2, with_base=with_base)
 print("solving time : {0} sec".format(time.time() - ts))
 
 # visualizatoin
@@ -90,11 +91,14 @@ viewer.add(Axis(pos=[0.8, -0.6, 0.8]))
 sscc.add_coll_spheres_to_viewer(viewer)
 viewer.show()
 av_seq = res.x
-for av in av_seq:
+#for av in gen_augumented_av_seq(av_seq):
+aug_traj = gen_augumented_av_seq(av_seq)
+assert sscc.check_trajectory(joint_list, aug_traj, with_base=with_base)
+for av in aug_traj:
     set_robot_config(robot_model, joint_list, av, with_base=with_base)
     sscc.update_color()
     viewer.redraw()
-    time.sleep(1.0)
+    time.sleep(0.1)
 
 cv.delete()
 
