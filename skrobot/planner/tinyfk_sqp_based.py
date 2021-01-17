@@ -4,6 +4,7 @@ import scipy
 from skrobot.planner.sqp_based import _sqp_based_trajectory_optimization
 from skrobot.planner.utils import scipinize
 from skrobot.planner.utils import update_fksolver
+from skrobot.planner.utils import compute_joint_weights
 from skrobot.utils.listify import listify
 
 
@@ -117,9 +118,8 @@ def tinyfk_sqp_plan_trajectory(collision_checker,
 
     # determine default weight
     if weights is None:
-        weights = [1.0] * len(joint_list)
-        if with_base:
-            weights += [3.0] * 3  # base should be difficult to move
+        weights = compute_joint_weights(joint_list, with_base)
+    assert len(weights) == n_dof
     weights = tuple(weights)  # to use cache
 
     joint_name_list = [j.name for j in joint_list]

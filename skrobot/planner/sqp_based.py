@@ -59,12 +59,14 @@ def sqp_plan_trajectory(collision_checker,
     joint_limit_list = [[j.min_angle, j.max_angle] for j in joint_list]
     if with_base:
         joint_limit_list += [[-np.inf, np.inf]] * 3
+    n_dof = len(joint_list) + (3 if with_base else 0)
 
     # determine default weight
     if weights is None:
         weights = [1.0] * len(joint_list)
         if with_base:
             weights += [3.0] * 3  # base should be difficult to move
+    assert len(weights) == n_dof
     weights = tuple(weights)  # to use cache
 
     # create initial solution for the optimization problem
