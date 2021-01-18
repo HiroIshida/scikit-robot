@@ -205,5 +205,20 @@ class ConstraintManager(object):
             [av_start + i * regular_interval for i in range(self.n_wp)])
         return initial_trajectory
 
+    def check_eqconst_validity(self, **kwargs):
+        # As for the pose constraint, the validity is clear when generating the 
+        # initial angle vector. So we are gonna check only terminal eq consts.
+        assert ("collision_checker" in kwargs), "to check validity you must specify a collision checker"
+        sscc = kwargs["collision_checker"]
+
+        joint_ids = self.fksolver.get_joint_ids([j.name for j in self.joint_list])
+        const_start = self.constraint_table[0]
+        const_end = self.constraint_table[self.n_wp - 1]
+        for const_config in [const_start, const_end]:
+            if isinstance(const_config, ConfigurationConstraint):
+                sd_vals = sscc._compute_batch_sd_vals(
+                    joint_ids, np.array([const_config.av_desired]), self.with_base)
+                assert np.all(sd_vals > 1e-3), "invalid eq-config constraint"
+
     def clear_constraint(self):
         self.constraint_table = {}
