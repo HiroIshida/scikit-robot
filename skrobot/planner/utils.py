@@ -17,7 +17,7 @@ def compute_joint_weights(joint_list, with_base=False):
     joint_depth_list = map(measure_depth, joint_list)
 
     if with_base: 
-        joint_depth_list = [d + 1 for d in joint_depth_list]
+        joint_depth_list = [d + 2 for d in joint_depth_list]
         joint_depth_list.extend([1, 1, 1])
 
     max_depth = max(joint_depth_list)
