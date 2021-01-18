@@ -216,7 +216,7 @@ class ConstraintManager(object):
         const_end = self.constraint_table[self.n_wp - 1]
         for const_config in [const_start, const_end]:
             if isinstance(const_config, ConfigurationConstraint):
-                sd_vals = sscc._compute_batch_sd_vals(
+                sd_vals, _ = sscc._compute_batch_sd_vals(
                     joint_ids, np.array([const_config.av_desired]), self.with_base)
                 assert np.all(sd_vals > 1e-3), "invalid eq-config constraint"
 
