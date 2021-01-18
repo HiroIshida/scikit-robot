@@ -1,4 +1,5 @@
 import copy
+import uuid
 
 import numpy as np
 import scipy
@@ -77,8 +78,9 @@ class SweptSphereSdfCollisionChecker(object):
             coords_list.append(coll_coords)
 
             # add sphere
+            name = coll_link.name + "_" + str(uuid.uuid1())
             sp = Sphere(radius=R, pos=coll_coords.worldpos(),
-                        color=self.color_normal_sphere)
+                        color=self.color_normal_sphere, name=name)
             coll_coords.assoc(sp)
             sphere_list.append(sp)
 
