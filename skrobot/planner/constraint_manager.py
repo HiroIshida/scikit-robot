@@ -219,6 +219,15 @@ class ConstraintManager(object):
                 sd_vals, _ = sscc._compute_batch_sd_vals(
                     joint_ids, np.array([const_config.av_desired]), self.with_base)
                 assert np.all(sd_vals > 1e-3), "invalid eq-config constraint"
+            if isinstance(const_config, PoseConstraint):
+                msg = "invalid pose constraint"
+                for pose in const_config.pose_desired_list:
+                    position = pose[:3]
+                    if isinstance(sscc.sdf, list):
+                        for sdf in sscc.sdf:
+                            assert sdf(position.reshape(1, 3)) > 3e-3, msg
+                    else:
+                        assert sscc.sdf(position.reshape(1, 3)) > 3e-3, msg
 
     def clear_constraint(self):
         self.constraint_table = {}
