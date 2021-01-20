@@ -59,12 +59,14 @@ def sqp_plan_trajectory(collision_checker,
     joint_limit_list = [[j.min_angle, j.max_angle] for j in joint_list]
     if with_base:
         joint_limit_list += [[-np.inf, np.inf]] * 3
+    n_dof = len(joint_list) + (3 if with_base else 0)
 
     # determine default weight
     if weights is None:
         weights = [1.0] * len(joint_list)
         if with_base:
             weights += [3.0] * 3  # base should be difficult to move
+    assert len(weights) == n_dof
     weights = tuple(weights)  # to use cache
 
     # create initial solution for the optimization problem
@@ -96,7 +98,8 @@ def _sqp_based_trajectory_optimization(
         fun_eq,
         joint_limit_list,
         weights,
-        slsqp_option=None):
+        slsqp_option=None,
+        callback=None):
 
     if slsqp_option is None:
         slsqp_option = {'ftol': 1e-3, 'disp': True, 'maxiter': 100}
@@ -130,9 +133,11 @@ def _sqp_based_trajectory_optimization(
         f, xi_init, method='SLSQP', jac=jac,
         bounds=bounds,
         constraints=[eq_dict, ineq_dict],
-        options=slsqp_option)
-    traj_opt = res.x.reshape(n_wp, n_dof)
-    return traj_opt
+        options=slsqp_option, 
+        callback=callback
+        )
+    res.x = res.x.reshape(n_wp, n_dof)
+    return res
 
 
 @lru_cache(maxsize=1000)
@@ -156,3 +161,4 @@ def construct_smoothcost_fullmat(n_wp, n_dof, weights):
     A_ = construct_smoothcost_mat(n_wp)
     A = np.kron(A_, w_mat**2)
     return A
+

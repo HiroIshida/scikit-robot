@@ -80,7 +80,7 @@ class Test_sqp_based_planner(unittest.TestCase):
             cm = ConstraintManager(n_wp, [j.name for j in joint_list], fksolver, with_base)
             cm.add_eq_configuration(0, av_start)
             cm.add_eq_configuration(n_wp-1, av_goal)
-            av_seq_init = cm.gen_initial_trajectory(av_start)
+            av_seq_init = cm.gen_initial_trajectory(av_init=av_start)
 
             av_seq = tinyfk_sqp_plan_trajectory(
                 sscc, cm, av_seq_init, joint_list, n_wp,
