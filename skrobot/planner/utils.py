@@ -18,7 +18,7 @@ def compute_joint_weights(joint_list, with_base=False):
 
     if with_base: 
         joint_depth_list = [d + 2 for d in joint_depth_list]
-        joint_depth_list.extend([1, 1, 1])
+        joint_depth_list.extend([0.1, 0.1, 0.1]) # set weight for base to be really heavy
 
     max_depth = max(joint_depth_list)
     joint_weight_list = [max_depth/(1.0*depth) for depth in joint_depth_list]
