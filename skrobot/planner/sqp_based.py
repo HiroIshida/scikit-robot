@@ -98,7 +98,8 @@ def _sqp_based_trajectory_optimization(
         fun_eq,
         joint_limit_list,
         weights,
-        slsqp_option=None):
+        slsqp_option=None,
+        callback=None):
 
     if slsqp_option is None:
         slsqp_option = {'ftol': 1e-3, 'disp': True, 'maxiter': 100}
@@ -132,7 +133,9 @@ def _sqp_based_trajectory_optimization(
         f, xi_init, method='SLSQP', jac=jac,
         bounds=bounds,
         constraints=[eq_dict, ineq_dict],
-        options=slsqp_option)
+        options=slsqp_option, 
+        callback=callback
+        )
     res.x = res.x.reshape(n_wp, n_dof)
     return res
 

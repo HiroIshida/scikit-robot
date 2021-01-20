@@ -108,7 +108,8 @@ def tinyfk_sqp_plan_trajectory(collision_checker,
                                safety_margin=1e-2,
                                with_base=False,
                                weights=None,
-                               slsqp_option=None
+                               slsqp_option=None,
+                               callback=None
                                ):
     # common stuff
     joint_limit_list = [[j.min_angle, j.max_angle] for j in joint_list]
@@ -145,5 +146,6 @@ def tinyfk_sqp_plan_trajectory(collision_checker,
         constraint_manager.gen_combined_constraint_func(),
         joint_limit_list,
         weights,
-        slsqp_option)
+        slsqp_option,
+        callback)
     return res
