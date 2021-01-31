@@ -20,6 +20,7 @@ def tinyfk_sqp_inverse_kinematics(
         collision_checker=None,
         safety_margin=1e-2,
         strategy="multi",
+        use_base_pose_guess=False,
         with_base=False):
 
     coords_name_list = listify(coords_name_list)
@@ -78,12 +79,17 @@ def tinyfk_sqp_inverse_kinematics(
     lower_limit, uppre_limit = tmp[:, 0], tmp[:, 1]
     bounds = list(zip(lower_limit, uppre_limit))
     slsqp_option = {'ftol': 1e-5, 'disp': True, 'maxiter': 100}
+
+    guess_base = av_guess[-3:]
     if strategy=="multi":
         assert with_base
         pose = target_pose_list[0][:3]
         base_pose_nominal = np.array([pose[0], pose[1], 0.0])
         while True:
-            av_guess[-3:] = base_pose_nominal + np.random.randn(3)
+            if use_base_pose_guess:
+                av_guess[-3:] = guess_base + np.random.randn(3) * 0.2
+            else:
+                av_guess[-3:] = base_pose_nominal + np.random.randn(3)
             res = scipy.optimize.minimize(
                 f, av_guess, method='SLSQP',
                 jac=jac, bounds=bounds, options=slsqp_option, constraints=constraints)
