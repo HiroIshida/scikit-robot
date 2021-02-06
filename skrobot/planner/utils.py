@@ -24,9 +24,8 @@ def compute_joint_weights(joint_list, with_base=False):
     joint_weight_list = [max_depth/(1.0*depth) for depth in joint_depth_list]
     return joint_weight_list
 
-def gen_augumented_av_seq(av_seq):
+def gen_augumented_av_seq(av_seq, n_mid=5):
     n_points = len(av_seq)
-    n_mid = 5
     augumented_av_seq = []
     for i in range(n_points-1):
         av = av_seq[i]
