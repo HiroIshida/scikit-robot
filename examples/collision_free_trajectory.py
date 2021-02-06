@@ -64,7 +64,7 @@ n_wp = 10
 fksolver = sscc.fksolver # TODO temporary
 cm = ConstraintManager(n_wp, [j.name for j in joint_list], fksolver, with_base)
 cm.add_eq_configuration(0, av_start)
-cm.add_pose_constraint(n_wp-1, "r_gripper_tool_frame", [0.75, -0.6, 0.8])
+cm.add_pose_constraint(n_wp-1, "r_gripper_tool_frame", [0.82, -0.6, 0.8, 0, 0, 0])
 
 av_current = get_robot_config(robot_model, joint_list, with_base=with_base)
 av_seq_init = cm.gen_initial_trajectory(av_current)
@@ -74,6 +74,15 @@ av_seq_init = cm.gen_initial_trajectory(av_current)
 ts = time.time()
 av_seq = tinyfk_sqp_plan_trajectory(
     sscc, cm, av_seq_init, joint_list, n_wp,
+    safety_margin=1e-2, with_base=with_base)
+print("solving time : {0} sec".format(time.time() - ts))
+
+# second motion planning with warm start
+cm.add_pose_constraint(n_wp-1, "r_gripper_tool_frame",
+        [0.80, -0.6, 0.8, 0, 0, 0], force=True)
+ts = time.time()
+av_seq = tinyfk_sqp_plan_trajectory(
+    sscc, cm, av_seq, joint_list, n_wp,
     safety_margin=1e-2, with_base=with_base)
 print("solving time : {0} sec".format(time.time() - ts))
 
@@ -93,7 +102,7 @@ for av in av_seq:
     set_robot_config(robot_model, joint_list, av, with_base=with_base)
     sscc.update_color()
     viewer.redraw()
-    time.sleep(1.0)
+    time.sleep(0.2)
 
 cv.delete()
 
