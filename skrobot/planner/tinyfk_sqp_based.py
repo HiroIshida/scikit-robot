@@ -11,6 +11,36 @@ from skrobot.utils.listify import listify
 class InvalidInitConfigException(Exception):
     pass
 
+def tinyfk_measure_nullspace(
+        av,
+        joint_list,
+        ef_name,
+        fksolver,
+        with_rot=True,
+        with_base=False
+        ):
+
+    joint_name_list = [j.name for j in joint_list]
+    joint_ids = fksolver.get_joint_ids(joint_name_list)
+    elink_ids = fksolver.get_link_ids([ef_name])
+
+    P, J = fksolver.solve_forward_kinematics(
+            [av], elink_ids, joint_ids, with_rot, with_base, True)
+    # remove all-zero vectors. for example, right arm angles are 
+    # irrelevant to the left arm end effector. So without this process,
+    # everything will get messy
+    J_nonzero = []
+    for i in range(J.shape[1]):
+        grad = J[:, i]
+        if np.linalg.norm(grad) > 1e-8:
+            J_nonzero.append(grad)
+    J_nonzero = np.array(J_nonzero)
+    determinant = np.linalg.det(J_nonzero.transpose().dot(J_nonzero))
+    # https://math.stackexchange.com/questions/2426361/how-to-measure-how-far-a-matrix-is-from-being-singular
+    measure = 1.0/np.linalg.norm(np.linalg.inv(J_nonzero.transpose().dot(J_nonzero)))
+
+    return determinant
+
 def tinyfk_sqp_inverse_kinematics(
         coords_name_list,
         target_pose_list,
@@ -136,6 +166,7 @@ def tinyfk_sqp_plan_trajectory(collision_checker,
     sd_vals_start, _ = collision_checker._compute_batch_sd_vals(
             joint_ids, np.array([initial_trajectory[0]]), with_base=with_base)
     if not np.all(sd_vals_start > 1e-3):
+        print(sd_vals_start)
         raise InvalidInitConfigException
 
     def collision_ineq_fun(av_seq):
