@@ -27,8 +27,13 @@ class TinyfkSweptSphereSdfCollisionChecker(SweptSphereSdfCollisionChecker):
             self,
             joint_list,
             angle_vector_seq,
-            with_base=False):
-        vals = self.compute_batch_sd_vals(joint_list, angle_vector_seq, with_base=True)
+            with_base=False,
+            verbose=False
+            ):
+        vals, _ = self.compute_batch_sd_vals(joint_list, angle_vector_seq, with_base=True)
+        if verbose:
+            print("***sd vals in check_trajectory***")
+            print(vals)
         return np.all(vals > 0)
 
     def compute_batch_sd_vals(
