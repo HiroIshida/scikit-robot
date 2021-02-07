@@ -108,7 +108,7 @@ def tinyfk_sqp_inverse_kinematics(
     tmp = np.array(joint_limit_list)
     lower_limit, uppre_limit = tmp[:, 0], tmp[:, 1]
     bounds = list(zip(lower_limit, uppre_limit))
-    slsqp_option = {'ftol': 1e-5, 'disp': True, 'maxiter': 100}
+    slsqp_option = {'ftol': 1e-5, 'disp': False, 'maxiter': 100}
 
     guess_base = av_guess[-3:]
     if strategy=="multi":
@@ -116,6 +116,7 @@ def tinyfk_sqp_inverse_kinematics(
         pose = target_pose_list[0][:3]
         base_pose_nominal = np.array([pose[0], pose[1], 0.0])
         while True:
+            print("solving collision ik with random base configs")
             if use_base_pose_guess:
                 av_guess[-3:] = guess_base + np.random.randn(3) * 0.2
             else:
@@ -124,9 +125,9 @@ def tinyfk_sqp_inverse_kinematics(
                 f, av_guess, method='SLSQP',
                 jac=jac, bounds=bounds, options=slsqp_option, constraints=constraints)
             if res.fun < 0.001:
-                print("solved")
+                print("solved and break")
                 break
-            print("solve failed... retry")
+            print("collision ik failed... retry")
         return res.x
 
     else:
