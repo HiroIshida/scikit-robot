@@ -218,7 +218,7 @@ class ConstraintManager(object):
             if isinstance(const_config, ConfigurationConstraint):
                 sd_vals, _ = sscc._compute_batch_sd_vals(
                     joint_ids, np.array([const_config.av_desired]), self.with_base)
-                assert np.all(sd_vals > 1e-3), "invalid eq-config constraint"
+                assert np.all(sd_vals > 0.0), "invalid eq-config constraint"
             if isinstance(const_config, PoseConstraint):
                 msg = "invalid pose constraint"
                 for pose in const_config.pose_desired_list:
