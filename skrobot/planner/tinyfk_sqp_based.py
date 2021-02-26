@@ -47,6 +47,8 @@ def tinyfk_sqp_inverse_kinematics(
         av_guess,     
         joint_list,
         fksolver,
+        maxiter=100,
+        constraint_radius=None,
         collision_checker=None,
         safety_margin=1e-2,
         strategy="multi",
@@ -72,6 +74,13 @@ def tinyfk_sqp_inverse_kinematics(
     joint_ids = fksolver.get_joint_ids(joint_name_list)
 
     # Construct constraints
+
+    def circle_ineq_fun(av):
+        dist = np.linalg.norm(av_guess - av)
+        f = constraint_radius**2 - dist**2
+        grad = 2 * (av_guess - av)
+        return f, grad
+
     if collision_checker is not None:
         def collision_ineq_fun(av):
             with_jacobian = True
@@ -80,7 +89,19 @@ def tinyfk_sqp_inverse_kinematics(
                 with_base=with_base, with_jacobian=with_jacobian)
             sd_vals_margined = sd_vals - safety_margin
             return sd_vals_margined, sd_val_jac
-        ineq_const_scipy, ineq_const_jac_scipy = scipinize(collision_ineq_fun)
+
+        if constraint_radius is None:
+            whole_ineq_fun = collision_ineq_fun
+        else:
+            print("solve ik with circle constraint")
+            def whole_ineq_fun(av):
+                f1, jac1 = collision_ineq_fun(av)
+                f2, jac2 = circle_ineq_fun(av)
+                f_whole = np.hstack((f1, f2))
+                jac_whole = np.vstack((jac1, jac2))
+                return f_whole, jac_whole
+
+        ineq_const_scipy, ineq_const_jac_scipy = scipinize(whole_ineq_fun)
         ineq_dict = {'type': 'ineq', 'fun': ineq_const_scipy,
                      'jac': ineq_const_jac_scipy}
         constraints = [ineq_dict]
@@ -108,7 +129,7 @@ def tinyfk_sqp_inverse_kinematics(
     tmp = np.array(joint_limit_list)
     lower_limit, uppre_limit = tmp[:, 0], tmp[:, 1]
     bounds = list(zip(lower_limit, uppre_limit))
-    slsqp_option = {'ftol': 1e-5, 'disp': False, 'maxiter': 100}
+    slsqp_option = {'ftol': 1e-5, 'disp': False, 'maxiter': maxiter}
 
     guess_base = av_guess[-3:]
     if strategy=="multi":
@@ -134,6 +155,7 @@ def tinyfk_sqp_inverse_kinematics(
         res = scipy.optimize.minimize(
             f, av_guess, method='SLSQP',
             jac=jac, bounds=bounds, options=slsqp_option, constraints=constraints)
+        print("result for circle constraint : {0}".format(circle_ineq_fun(res.x)[0]))
         return res.x
 
 
