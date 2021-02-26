@@ -139,7 +139,7 @@ class PoseConstraint(EqualityConstraint):
         coords_ids = self.fksolver.get_link_ids(self.coords_name_list)
         av_solved = tinyfk_sqp_inverse_kinematics(
             self.coords_name_list, self.pose_desired_list, av_init, self.joint_list,
-            self.fksolver, collision_checker, with_base=self.with_base)
+            self.fksolver, collision_checker=collision_checker, with_base=self.with_base)
         return av_solved
 
 def listify_if_not_list(something):
