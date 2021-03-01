@@ -5,6 +5,13 @@ from skrobot.coordinates import Coordinates
 from skrobot.coordinates.math import rpy_angle
 from skrobot.coordinates.math import rpy_matrix
 
+def compute_simple_joint_weights(joint_list, with_base=False):
+    n_dof = len(joint_list)
+    joint_weights = np.ones(n_dof)
+    if not with_base:
+        return joint_weights
+    return np.hstack([joint_weights, np.ones(3) * 10])
+
 def compute_joint_weights(joint_list, with_base=False):
 
     def measure_depth(joint):
