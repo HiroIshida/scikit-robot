@@ -168,7 +168,8 @@ def tinyfk_sqp_plan_trajectory(collision_checker,
                                with_base=False,
                                weights=None,
                                slsqp_option=None,
-                               callback=None
+                               callback=None,
+                               ignore_collision=False,
                                ):
     # common stuff
     joint_limit_list = [[j.min_angle, j.max_angle] for j in joint_list]
@@ -193,13 +194,17 @@ def tinyfk_sqp_plan_trajectory(collision_checker,
         print(sd_vals_start)
         raise InvalidInitConfigException
 
-    def collision_ineq_fun(av_seq):
-        with_jacobian = True
-        sd_vals, sd_val_jac = collision_checker._compute_batch_sd_vals(
-            joint_ids, av_seq,
-            with_base=with_base, with_jacobian=with_jacobian)
-        sd_vals_margined = sd_vals - safety_margin
-        return sd_vals_margined, sd_val_jac
+    # if collision_checker is None, collision wil not be considered
+    if ignore_collision:
+        collision_ineq_fun = None
+    else:
+        def collision_ineq_fun(av_seq):
+            with_jacobian = True
+            sd_vals, sd_val_jac = collision_checker._compute_batch_sd_vals(
+                joint_ids, av_seq,
+                with_base=with_base, with_jacobian=with_jacobian)
+            sd_vals_margined = sd_vals - safety_margin
+            return sd_vals_margined, sd_val_jac
 
     res = _sqp_based_trajectory_optimization(
         initial_trajectory,

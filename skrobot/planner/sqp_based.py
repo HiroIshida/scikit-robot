@@ -111,16 +111,21 @@ def _sqp_based_trajectory_optimization(
         grad = A.dot(x) / n_wp
         return f, grad
 
-    def fun_ineq(xi):
-        av_seq = xi.reshape(n_wp, n_dof)
-        return collision_ineq_fun(av_seq)
 
     eq_const_scipy, eq_const_jac_scipy = scipinize(fun_eq)
     eq_dict = {'type': 'eq', 'fun': eq_const_scipy,
                'jac': eq_const_jac_scipy}
-    ineq_const_scipy, ineq_const_jac_scipy = scipinize(fun_ineq)
-    ineq_dict = {'type': 'ineq', 'fun': ineq_const_scipy,
-                 'jac': ineq_const_jac_scipy}
+    constraints = [eq_dict]
+
+    if collision_ineq_fun is not None:
+        def fun_ineq(xi):
+            av_seq = xi.reshape(n_wp, n_dof)
+            return collision_ineq_fun(av_seq)
+        ineq_const_scipy, ineq_const_jac_scipy = scipinize(fun_ineq)
+        ineq_dict = {'type': 'ineq', 'fun': ineq_const_scipy,
+                     'jac': ineq_const_jac_scipy}
+        constraints.append(ineq_dict)
+
     f, jac = scipinize(fun_objective)
 
     tmp = np.array(joint_limit_list)
@@ -132,7 +137,7 @@ def _sqp_based_trajectory_optimization(
     res = scipy.optimize.minimize(
         f, xi_init, method='SLSQP', jac=jac,
         bounds=bounds,
-        constraints=[eq_dict, ineq_dict],
+        constraints=constraints,
         options=slsqp_option, 
         callback=callback
         )
