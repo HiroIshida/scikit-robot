@@ -1,3 +1,4 @@
+from skrobot.planner.utils import gen_augumented_av_seq
 from skrobot.planner import SweptSphereSdfCollisionChecker
 import numpy as np
 
@@ -27,10 +28,12 @@ class TinyfkSweptSphereSdfCollisionChecker(SweptSphereSdfCollisionChecker):
             self,
             joint_list,
             angle_vector_seq,
+            n_mid=2,
             with_base=False,
             verbose=False
             ):
-        vals, _ = self.compute_batch_sd_vals(joint_list, angle_vector_seq, with_base=True)
+        av_seq_aug = gen_augumented_av_seq(angle_vector_seq, n_mid=n_mid)
+        vals, _ = self.compute_batch_sd_vals(joint_list, av_seq_aug, with_base=True)
         if verbose:
             print("***sd vals in check_trajectory***")
             print(vals)
