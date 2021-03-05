@@ -5,12 +5,16 @@ from skrobot.coordinates import Coordinates
 from skrobot.coordinates.math import rpy_angle
 from skrobot.coordinates.math import rpy_matrix
 
-def compute_simple_joint_weights(joint_list, with_base=False):
+def compute_simple_joint_weights(joint_list, with_base=False, heavy_wrist=True):
     n_dof = len(joint_list)
     joint_weights = np.ones(n_dof)
     if not with_base:
         return joint_weights
-    return np.hstack([joint_weights, np.ones(3) * 10])
+    w = np.hstack([joint_weights, np.ones(3) * 10])
+    for i, joint in zip(range(n_dof), joint_list):
+        if "wrist_roll" in joint.name:
+            w[i] = 30
+    return w
 
 def compute_joint_weights(joint_list, with_base=False):
 
