@@ -155,7 +155,8 @@ def tinyfk_sqp_inverse_kinematics(
         res = scipy.optimize.minimize(
             f, av_guess, method='SLSQP',
             jac=jac, bounds=bounds, options=slsqp_option, constraints=constraints)
-        print("result for circle constraint : {0}".format(circle_ineq_fun(res.x)[0]))
+        if constraint_radius is not None:
+            print("result for circle constraint : {0}".format(circle_ineq_fun(res.x)[0]))
         return res.x
 
 
