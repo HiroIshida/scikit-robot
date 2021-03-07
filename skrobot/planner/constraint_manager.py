@@ -4,6 +4,12 @@ from skrobot.planner import tinyfk_sqp_inverse_kinematics
 
 # TODO check added eq_configuration is valid by pre-solving collision checking
 
+class InvalidPoseCstrException(Exception):
+    pass
+
+class InvalidConfigurationCstrException(Exception):
+    pass
+
 class EqualityConstraint(object):
     def __init__(self, n_wp, n_dof, idx_wp, name):
         assert (idx_wp in range(n_wp)), "index {0} is out fo range".format(idx_wp)
@@ -218,16 +224,19 @@ class ConstraintManager(object):
             if isinstance(const_config, ConfigurationConstraint):
                 sd_vals, _ = sscc._compute_batch_sd_vals(
                     joint_ids, np.array([const_config.av_desired]), self.with_base)
-                assert np.all(sd_vals > 0.0), "invalid eq-config constraint"
+                if not np.all(sd_vals > 0.0):
+                    raise InvalidConfigurationCstrException("invalid eq-config constraint")
             if isinstance(const_config, PoseConstraint):
                 msg = "invalid pose constraint : {0}".format(name)
                 for pose in const_config.pose_desired_list:
                     position = pose[:3]
                     if isinstance(sscc.sdf, list):
                         for sdf in sscc.sdf:
-                            assert sdf(position.reshape(1, 3)) > 3e-3, msg
+                            if not sdf(position.reshape(1, 3)) > 3e-3:
+                                raise InvalidPoseCstrException(msg)
                     else:
-                        assert sscc.sdf(position.reshape(1, 3)) > 3e-3, msg
+                        if not sscc.sdf(position.reshape(1, 3)) > 3e-3:
+                            raise InvalidPoseCstrException(msg)
 
     def clear_constraint(self):
         self.constraint_table = {}
