@@ -214,13 +214,13 @@ class ConstraintManager(object):
         joint_ids = self.fksolver.get_joint_ids([j.name for j in self.joint_list])
         const_start = self.constraint_table[0]
         const_end = self.constraint_table[self.n_wp - 1]
-        for const_config in [const_start, const_end]:
+        for const_config, name in zip([const_start, const_end], ["start_constraint", "goal_constraint"]):
             if isinstance(const_config, ConfigurationConstraint):
                 sd_vals, _ = sscc._compute_batch_sd_vals(
                     joint_ids, np.array([const_config.av_desired]), self.with_base)
                 assert np.all(sd_vals > 0.0), "invalid eq-config constraint"
             if isinstance(const_config, PoseConstraint):
-                msg = "invalid pose constraint"
+                msg = "invalid pose constraint : {0}".format(name)
                 for pose in const_config.pose_desired_list:
                     position = pose[:3]
                     if isinstance(sscc.sdf, list):
