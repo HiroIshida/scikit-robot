@@ -220,23 +220,20 @@ class ConstraintManager(object):
         joint_ids = self.fksolver.get_joint_ids([j.name for j in self.joint_list])
         const_start = self.constraint_table[0]
         const_end = self.constraint_table[self.n_wp - 1]
-        for const_config, name in zip([const_start, const_end], ["start_constraint", "goal_constraint"]):
+        for const_config, wp in zip([const_start, const_end], [0, self.n_wp-1]):
             if isinstance(const_config, ConfigurationConstraint):
                 sd_vals, _ = sscc._compute_batch_sd_vals(
                     joint_ids, np.array([const_config.av_desired]), self.with_base)
                 if not np.all(sd_vals > 0.0):
                     raise InvalidConfigurationCstrException("invalid eq-config constraint")
             if isinstance(const_config, PoseConstraint):
-                msg = "invalid pose constraint : {0}".format(name)
+                msg = "invalid pose constraint, number: {0}\n target pose list{1}\n".format(wp, const_config.pose_desired_list)
                 for pose in const_config.pose_desired_list:
                     position = pose[:3]
-                    if isinstance(sscc.sdf, list):
-                        for sdf in sscc.sdf:
-                            if not sdf(position.reshape(1, 3)) > 3e-3:
-                                raise InvalidPoseCstrException(msg)
-                    else:
-                        if not sscc.sdf(position.reshape(1, 3)) > 3e-3:
-                            raise InvalidPoseCstrException(msg)
+                    sdf = sscc.sdf[wp] if isinstance(sscc.sdf, list) else sscc.sdf
+                    sdval = sdf(position.reshape(1, 3))
+                    if not sdval > 3e-3:
+                        raise InvalidPoseCstrException(msg + "sdval : {0}".format(sdval))
 
     def clear_constraint(self):
         self.constraint_table = {}
