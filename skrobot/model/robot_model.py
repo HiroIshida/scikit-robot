@@ -1,13 +1,13 @@
 import io
 import itertools
 from logging import getLogger
-import warnings
 
 import numpy as np
 import numpy.linalg as LA
 from ordered_set import OrderedSet
 import six
 import trimesh
+import tinyfk
 
 from skrobot.coordinates import _wrap_axis
 from skrobot.coordinates import CascadedCoords
@@ -1484,6 +1484,7 @@ class CascadedLink(CascadedCoords):
 
         col = col_offset
         i = 0
+        world_default_coords = Coordinates()
         while col < (col_offset + jdim):
             ul = union_link_list[i]
             row = 0
@@ -1509,8 +1510,9 @@ class CascadedLink(CascadedCoords):
                         child_link = joint.child_link
                         parent_link = joint.parent_link
                         default_coords = joint.default_coords
-                        world_default_coords = parent_link.copy_worldcoords().\
-                            transform(default_coords)
+                        # set new coordinates to world_default_coords.
+                        parent_link.worldcoords().\
+                            transform(default_coords, out=world_default_coords)
 
                         jacobian = joint.calc_jacobian(
                             jacobian,
@@ -1635,6 +1637,7 @@ class RobotModel(CascadedLink):
         for joint in joint_list:
             self.__dict__[joint.name] = joint
         self.urdf_path = None
+        self.fksolver = None
 
         self._relevance_predicate_table = \
             self._compute_relevance_predicate_table()
@@ -1648,53 +1651,6 @@ class RobotModel(CascadedLink):
     def init_pose(self):
         return self.angle_vector(np.zeros_like(self.angle_vector()))
 
-    def _meshes_from_urdf_visuals(self, visuals):
-        meshes = []
-        for visual in visuals:
-            meshes.extend(self._meshes_from_urdf_visual(visual))
-        return meshes
-
-    def _meshes_from_urdf_visual(self, visual):
-        if not isinstance(visual, urdf.Visual):
-            raise TypeError('visual must be urdf.Visual, but got: {}'
-                            .format(type(visual)))
-
-        meshes = []
-        for mesh in visual.geometry.meshes:
-            mesh = mesh.copy()
-
-            # rescale
-            if visual.geometry.mesh is not None:
-                if visual.geometry.mesh.scale is not None:
-                    mesh.vertices = mesh.vertices * visual.geometry.mesh.scale
-
-            # TextureVisuals is usually slow to render
-            if not isinstance(mesh.visual, trimesh.visual.ColorVisuals):
-                mesh.visual = mesh.visual.to_color()
-                if mesh.visual.vertex_colors.ndim == 1:
-                    mesh.visual.vertex_colors = \
-                        mesh.visual.vertex_colors[None].repeat(
-                            mesh.vertices.shape[0], axis=0
-                        )
-
-            # If color or texture is not specified in mesh file,
-            # use information specified in URDF.
-            if (
-                (mesh.visual.face_colors
-                 == trimesh.visual.DEFAULT_COLOR).all()
-                and visual.material
-            ):
-                if visual.material.texture is not None:
-                    warnings.warn(
-                        'texture specified in URDF is not supported'
-                    )
-                elif visual.material.color is not None:
-                    mesh.visual.face_colors = visual.material.color
-
-            mesh.apply_transform(visual.origin)
-            meshes.append(mesh)
-        return meshes
-
     def load_urdf(self, urdf):
         f = io.StringIO()
         f.write(urdf)
@@ -1706,15 +1662,14 @@ class RobotModel(CascadedLink):
             self.urdf_path = file_obj
         else:
             self.urdf_path = getattr(file_obj, 'name', None)
+
+        self.fksolver = tinyfk.RobotModel(self.urdf_path)
         self.urdf_robot_model = URDF.load(file_obj=file_obj)
         root_link = self.urdf_robot_model.base_link
 
         links = []
         for urdf_link in self.urdf_robot_model.links:
-            link = Link(name=urdf_link.name)
-            link.collision_mesh = urdf_link.collision_mesh
-            link.visual_mesh = self._meshes_from_urdf_visuals(
-                urdf_link.visuals)
+            link = Link.from_urdf_link(urdf_link)
             links.append(link)
         link_maps = {l.name: l for l in links}
 

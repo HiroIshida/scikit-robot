@@ -1,4 +1,5 @@
 import copy
+import uuid
 
 import numpy as np
 import scipy
@@ -15,7 +16,7 @@ class SweptSphereSdfCollisionChecker(object):
     """Collision checker between swept spheres and sdf"""
 
     def __init__(self, sdf, robot_model):
-        self.sdf = sdf
+        self.set_sdf(sdf)
         self.robot_model = robot_model
 
         self.coll_link_name_list = []
@@ -26,6 +27,10 @@ class SweptSphereSdfCollisionChecker(object):
 
         self.color_normal_sphere = [250, 250, 10, 200]
         self.color_collision_sphere = [255, 0, 0, 200]
+
+    def set_sdf(self, sdf):
+        self.sdf = sdf
+        self.time_dep = isinstance(sdf, list)
 
     def add_coll_spheres_to_viewer(self, viewer):
         """Add collision sheres to viewer
@@ -73,8 +78,9 @@ class SweptSphereSdfCollisionChecker(object):
             coords_list.append(coll_coords)
 
             # add sphere
+            name = coll_link.name + "_" + str(uuid.uuid1())
             sp = Sphere(radius=R, pos=coll_coords.worldpos(),
-                        color=self.color_normal_sphere)
+                        color=self.color_normal_sphere, name=name)
             coll_coords.assoc(sp)
             sphere_list.append(sp)
 
@@ -206,10 +212,18 @@ class SweptSphereSdfCollisionChecker(object):
         n_wp, n_feature, _ = pts_batch.shape
         n_total_feature = n_wp * n_feature
 
+        def compute_batch_flatten_sdf(pts_batch):
+            if self.time_dep:
+                return np.hstack(
+                        [self.sdf[idx].__call__(pts_batch[idx*n_feature:(idx+1)*n_feature, :])
+                            for idx in range(n_wp)])
+            else:
+                return self.sdf(pts_batch)
+
         # flattening (n_wp, n_feature, 3) -> (n_wp * n_feature, 3)
         # is necessary to copmute sdf() without using loop.
         pts_batch_flatten = pts_batch.reshape((n_total_feature, 3))
-        sd_vals_batch_flatten = self.sdf(pts_batch_flatten)
+        sd_vals_batch_flatten = compute_batch_flatten_sdf(pts_batch_flatten)
 
         # we must convert it to sphere's signed distnace
         radius_arr_traj = np.array(self.coll_radius_list * n_wp)
@@ -225,7 +239,7 @@ class SweptSphereSdfCollisionChecker(object):
         for idx in range(3):
             pts_batch_flatten_plus = copy.copy(pts_batch_flatten)
             pts_batch_flatten_plus[:, idx] += eps
-            sd_vals_batch_flatten_plus = self.sdf(pts_batch_flatten_plus)
+            sd_vals_batch_flatten_plus = compute_batch_flatten_sdf(pts_batch_flatten_plus)
             diff = sd_vals_batch_flatten_plus - sd_vals_batch_flatten
             sd_val_grads_batch_flatten[:, idx] = diff / eps
         sd_val_grads_batch = sd_val_grads_batch_flatten.reshape(

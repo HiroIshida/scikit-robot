@@ -8,8 +8,11 @@ from skrobot.model.primitives import Axis
 from skrobot.model.primitives import Box
 from skrobot.planner import tinyfk_sqp_plan_trajectory
 from skrobot.planner import TinyfkSweptSphereSdfCollisionChecker
+from skrobot.planner import ConstraintManager
+from skrobot.planner import ConstraintViewer
 from skrobot.planner.utils import get_robot_config
 from skrobot.planner.utils import set_robot_config
+from skrobot.planner.utils import gen_augumented_av_seq
 
 # initialization stuff
 np.random.seed(0)
@@ -33,15 +36,15 @@ coll_link_list = [
     robot_model.r_gripper_l_finger_link]
 
 # obtain av_start (please try both with_base=True, FalseA)
-with_base = True
+with_base = True # support only with_base now
 av_start = np.array([0.564, 0.35, -0.74, -0.7, -0.7, -0.17, -0.63])
 if with_base:
     av_start = np.hstack([av_start, [0, 0, 0]])
 
 # solve inverse kinematics to obtain av_goal
 coef = 3.1415 / 180.0
-joint_angles = [coef * e for e in [-60, 74, -70, -120, -20, -30, 180]]
-set_robot_config(robot_model, joint_list, joint_angles)
+joint_angles = [coef * e for e in [-60, 74, -70, -120, -20, -30, 180]] + [0, 0, 0]
+set_robot_config(robot_model, joint_list, joint_angles, with_base=True)
 
 rarm_end_coords = skrobot.coordinates.CascadedCoords(
     parent=robot_model.r_gripper_tool_frame,
@@ -57,26 +60,47 @@ sscc = TinyfkSweptSphereSdfCollisionChecker(lambda X: box.sdf(X), robot_model)
 for link in coll_link_list:
     sscc.add_collision_link(link)
 
+# constraint manager
+n_wp = 10
+fksolver = sscc.fksolver # TODO temporary
+cm = ConstraintManager(n_wp, joint_list, fksolver, with_base)
+cm.add_eq_configuration(0, av_start)
+cm.add_pose_constraint(n_wp-1, "r_gripper_tool_frame", [0.75, -0.6, 0.8])
+
+av_current = get_robot_config(robot_model, joint_list, with_base=with_base)
+av_seq_init = cm.gen_initial_trajectory(av_init=av_current, collision_checker=sscc)
+
+
 # motion planning
 ts = time.time()
-av_seq = tinyfk_sqp_plan_trajectory(
-    sscc, av_start, av_goal, joint_list, 10,
-    safety_margin=1e-2, with_base=with_base)
+res = tinyfk_sqp_plan_trajectory(
+    sscc, cm, av_seq_init, joint_list, n_wp,
+    safety_margin=5e-2, with_base=with_base)
 print("solving time : {0} sec".format(time.time() - ts))
 
 # visualizatoin
 print("show trajectory")
 viewer = skrobot.viewers.TrimeshSceneViewer(resolution=(641, 480))
+
+cv = ConstraintViewer(viewer, cm)
+cv.show()
+
 viewer.add(robot_model)
 viewer.add(box)
 viewer.add(Axis(pos=[0.8, -0.6, 0.8]))
 sscc.add_coll_spheres_to_viewer(viewer)
 viewer.show()
-for av in av_seq:
+av_seq = res.x
+#for av in gen_augumented_av_seq(av_seq):
+aug_traj = gen_augumented_av_seq(av_seq)
+assert sscc.check_trajectory(joint_list, aug_traj, with_base=with_base)
+for av in aug_traj:
     set_robot_config(robot_model, joint_list, av, with_base=with_base)
     sscc.update_color()
     viewer.redraw()
-    time.sleep(1.0)
+    time.sleep(0.1)
+
+cv.delete()
 
 print('==> Press [q] to close window')
 while not viewer.has_exit:

@@ -5,6 +5,55 @@ from skrobot.coordinates import Coordinates
 from skrobot.coordinates.math import rpy_angle
 from skrobot.coordinates.math import rpy_matrix
 
+def compute_simple_joint_weights(joint_list, with_base=False, heavy_wrist=True):
+    n_dof = len(joint_list)
+    joint_weights = np.ones(n_dof)
+    if not with_base:
+        return joint_weights
+    w = np.hstack([joint_weights, np.ones(3) * 10])
+    for i, joint in zip(range(n_dof), joint_list):
+        if "wrist_roll" in joint.name:
+            w[i] = 30
+    return w
+
+def compute_joint_weights(joint_list, with_base=False):
+
+    def measure_depth(joint):
+        link = joint.parent_link
+        depth = 1
+        while link.parent_link is not None:
+            link = link.parent_link
+            depth += 1
+        return depth
+    joint_depth_list = map(measure_depth, joint_list)
+
+    if with_base: 
+        joint_depth_list = [d + 2 for d in joint_depth_list]
+        joint_depth_list.extend([0.1, 0.1, 0.1]) # set weight for base to be really heavy
+
+    max_depth = max(joint_depth_list)
+    joint_weight_list = [max_depth/(1.0*depth) for depth in joint_depth_list]
+    return joint_weight_list
+
+def gen_augumented_av_seq(av_seq, n_mid=5):
+    n_points = len(av_seq)
+    augumented_av_seq = []
+    for i in range(n_points-1):
+        av = av_seq[i]
+        av_next = av_seq[i+1]
+        w = (av_next - av)/(n_mid + 1)
+        for j in range(n_mid+1):
+            augumented_av_seq.append(av + w * j)
+    augumented_av_seq.append(av_seq[-1])
+    return np.vstack(augumented_av_seq)
+
+def update_fksolver(robot_model):
+    joint_list = robot_model.joint_list
+    joint_names = [j.name for j in joint_list]
+    joint_ids = robot_model.fksolver.get_joint_ids(joint_names)
+
+    av_full = get_robot_config(robot_model, joint_list, with_base=True)
+    robot_model.fksolver.set_joint_angles(joint_ids, av_full, with_base=True)
 
 def scipinize(fun):
     """Scipinize a function returning both f and jac

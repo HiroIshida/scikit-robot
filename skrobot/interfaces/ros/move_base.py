@@ -314,7 +314,7 @@ class ROSRobotMoveBaseInterface(ROSRobotInterfaceBase):
         else:
             return True
 
-    def go_pos_unsafe_no_wait(self, x=0.0, y=0.0, yaw=0.0):
+    def go_pos_unsafe_no_wait(self, x=0.0, y=0.0, yaw=0.0, sec=None):
         """Move Robot using MoveBase
 
         Parameters
@@ -333,9 +333,10 @@ class ROSRobotMoveBaseInterface(ROSRobotInterfaceBase):
         maxvel = 0.295
         maxrad = 0.495
         ratio = 0.8
-        sec = max(np.linalg.norm([x, y]) / (maxvel * ratio),
-                  abs(yaw) / (maxrad * ratio),
-                  1.0)
+        if sec is None:
+            sec = max(np.linalg.norm([x, y]) / (maxvel * ratio),
+                      abs(yaw) / (maxrad * ratio),
+                      1.0)
         self.go_pos_unsafe_goal_msg = self.move_trajectory(
             x, y, yaw,
             sec, stop=True)
@@ -510,10 +511,12 @@ class ROSRobotMoveBaseInterface(ROSRobotInterfaceBase):
                     'but move_base_trajectory_action is not found')
                 return False
             self.move_base_trajectory_action.send_goal(goal.goal)
+            """
             if self.move_base_trajectory_action.wait_for_result():
                 return self.move_base_trajectory_action.get_result()
             else:
                 return False
+            """
         return goal
 
     def move_trajectory(self, x, y, yaw, sec=1.0, stop=True,

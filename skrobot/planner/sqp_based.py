@@ -1,14 +1,8 @@
 import numpy as np
 import scipy
 
-try:
-    # in python3
-    from functools import lru_cache
-except ImportError:
-    # in python2
-    from repoze.lru import lru_cache
-
 from skrobot.planner.utils import scipinize
+from skrobot.pycompat import lru_cache
 
 
 def sqp_plan_trajectory(collision_checker,
@@ -65,12 +59,14 @@ def sqp_plan_trajectory(collision_checker,
     joint_limit_list = [[j.min_angle, j.max_angle] for j in joint_list]
     if with_base:
         joint_limit_list += [[-np.inf, np.inf]] * 3
+    n_dof = len(joint_list) + (3 if with_base else 0)
 
     # determine default weight
     if weights is None:
         weights = [1.0] * len(joint_list)
         if with_base:
             weights += [3.0] * 3  # base should be difficult to move
+    assert len(weights) == n_dof
     weights = tuple(weights)  # to use cache
 
     # create initial solution for the optimization problem
@@ -99,12 +95,14 @@ def sqp_plan_trajectory(collision_checker,
 def _sqp_based_trajectory_optimization(
         av_seq_init,
         collision_ineq_fun,
+        fun_eq,
         joint_limit_list,
         weights,
-        slsqp_option=None):
+        slsqp_option=None,
+        callback=None):
 
     if slsqp_option is None:
-        slsqp_option = {'ftol': 1e-4, 'disp': True, 'maxiter': 100}
+        slsqp_option = {'ftol': 1e-3, 'disp': True, 'maxiter': 100}
     n_wp, n_dof = av_seq_init.shape
     A = construct_smoothcost_fullmat(n_wp, n_dof, weights=weights)
 
@@ -113,27 +111,21 @@ def _sqp_based_trajectory_optimization(
         grad = A.dot(x) / n_wp
         return f, grad
 
-    def fun_ineq(xi):
-        av_seq = xi.reshape(n_wp, n_dof)
-        return collision_ineq_fun(av_seq)
-
-    def fun_eq(xi):
-        # terminal constraint
-        Q = xi.reshape(n_wp, n_dof)
-        q_start = av_seq_init[0]
-        q_end = av_seq_init[-1]
-        f = np.hstack((q_start - Q[0], q_end - Q[-1]))
-        grad_ = np.zeros((n_dof * 2, n_dof * n_wp))
-        grad_[:n_dof, :n_dof] = - np.eye(n_dof)
-        grad_[-n_dof:, -n_dof:] = - np.eye(n_dof)
-        return f, grad_
 
     eq_const_scipy, eq_const_jac_scipy = scipinize(fun_eq)
     eq_dict = {'type': 'eq', 'fun': eq_const_scipy,
                'jac': eq_const_jac_scipy}
-    ineq_const_scipy, ineq_const_jac_scipy = scipinize(fun_ineq)
-    ineq_dict = {'type': 'ineq', 'fun': ineq_const_scipy,
-                 'jac': ineq_const_jac_scipy}
+    constraints = [eq_dict]
+
+    if collision_ineq_fun is not None:
+        def fun_ineq(xi):
+            av_seq = xi.reshape(n_wp, n_dof)
+            return collision_ineq_fun(av_seq)
+        ineq_const_scipy, ineq_const_jac_scipy = scipinize(fun_ineq)
+        ineq_dict = {'type': 'ineq', 'fun': ineq_const_scipy,
+                     'jac': ineq_const_jac_scipy}
+        constraints.append(ineq_dict)
+
     f, jac = scipinize(fun_objective)
 
     tmp = np.array(joint_limit_list)
@@ -145,10 +137,12 @@ def _sqp_based_trajectory_optimization(
     res = scipy.optimize.minimize(
         f, xi_init, method='SLSQP', jac=jac,
         bounds=bounds,
-        constraints=[eq_dict, ineq_dict],
-        options=slsqp_option)
-    traj_opt = res.x.reshape(n_wp, n_dof)
-    return traj_opt
+        constraints=constraints,
+        options=slsqp_option, 
+        callback=callback
+        )
+    res.x = res.x.reshape(n_wp, n_dof)
+    return res
 
 
 @lru_cache(maxsize=1000)
@@ -172,3 +166,4 @@ def construct_smoothcost_fullmat(n_wp, n_dof, weights):
     A_ = construct_smoothcost_mat(n_wp)
     A = np.kron(A_, w_mat**2)
     return A
+

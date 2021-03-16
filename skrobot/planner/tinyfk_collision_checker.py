@@ -1,6 +1,6 @@
-import tinyfk
-
+from skrobot.planner.utils import gen_augumented_av_seq
 from skrobot.planner import SweptSphereSdfCollisionChecker
+import numpy as np
 
 
 class TinyfkSweptSphereSdfCollisionChecker(SweptSphereSdfCollisionChecker):
@@ -9,7 +9,7 @@ class TinyfkSweptSphereSdfCollisionChecker(SweptSphereSdfCollisionChecker):
     def __init__(self, sdf, robot_model):
         super(TinyfkSweptSphereSdfCollisionChecker, self).__init__(
             sdf, robot_model)
-        self.fksolver = tinyfk.RobotModel(robot_model.urdf_path)
+        self.fksolver = robot_model.fksolver
         self.coll_sphere_id_list = []
 
     def add_collision_link(self, coll_link):
@@ -23,6 +23,21 @@ class TinyfkSweptSphereSdfCollisionChecker(SweptSphereSdfCollisionChecker):
 
         sphere_ids = self.fksolver.get_link_ids(sphere_name_list)
         self.coll_sphere_id_list.extend(sphere_ids)
+
+    def check_trajectory(
+            self,
+            joint_list,
+            angle_vector_seq,
+            n_mid=2,
+            with_base=False,
+            verbose=False
+            ):
+        av_seq_aug = gen_augumented_av_seq(angle_vector_seq, n_mid=n_mid)
+        vals, _ = self.compute_batch_sd_vals(joint_list, av_seq_aug, with_base=True)
+        if verbose:
+            print("***sd vals in check_trajectory***")
+            print(vals)
+        return np.all(vals > 0)
 
     def compute_batch_sd_vals(
             self,
