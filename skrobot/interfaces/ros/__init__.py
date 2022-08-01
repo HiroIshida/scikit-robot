@@ -5,7 +5,4 @@ try:
 except ImportError:
     pass
 
-try:
-    from .pr2 import PR2ROSRobotInterface
-except ImportError:
-    pass
+from .pr2 import PR2ROSRobotInterface
