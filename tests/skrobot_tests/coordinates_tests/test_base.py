@@ -1,3 +1,4 @@
+import pickle
 import unittest
 
 import numpy as np
@@ -406,6 +407,10 @@ class TestCoordinates(unittest.TestCase):
         dif_rot = coord1.difference_rotation(coord2, 'xz')
         testing.assert_almost_equal(dif_rot, [0, pi / 2, 0])
 
+    def test_pickle(self):
+        co = make_coords()
+        pickle.dumps(co)
+
 
 class TestCascadedCoordinates(unittest.TestCase):
 
@@ -553,3 +558,7 @@ class TestCascadedCoordinates(unittest.TestCase):
         coords.orient_with_matrix(rotation_matrix, wrt='world')
         wrt = make_coords().rotate(np.pi / 2.0, 'z')
         coords.orient_with_matrix(rotation_matrix, wrt=wrt)
+
+    def test_pickle(self):
+        co = make_cascoords()
+        pickle.dumps(co)
