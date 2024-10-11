@@ -9,6 +9,7 @@ from skrobot.coordinates.base import Coordinates
 from skrobot.model import Link
 from skrobot.sdf import BoxSDF
 from skrobot.sdf import CylinderSDF
+from skrobot.sdf import PointCloudSDF
 from skrobot.sdf import SphereSDF
 from skrobot.sdf import trimesh2sdf
 
@@ -265,12 +266,12 @@ class MeshLink(Link, SDFImplemented):
             self._sdf = None
 
 
-class PointCloudLink(Link):
+class PointCloudLink(Link, SDFImplemented):
 
     def __init__(self,
                  point_cloud_like=None,
                  colors=None,
-                 pos=(0, 0, 0), rot=np.eye(3), name=None):
+                 pos=(0, 0, 0), rot=np.eye(3), name=None, with_sdf=False, radius=0.0):
 
         accep_types = (type(None), np.ndarray, PointCloud)
         if not isinstance(point_cloud_like, accep_types):
@@ -281,8 +282,10 @@ class PointCloudLink(Link):
             assert point_cloud_like.ndim == 2
             assert point_cloud_like.shape[1] == 3
             pcloud_mesh = PointCloud(point_cloud_like, colors)
+            np_points = point_cloud_like
         else:
             pcloud_mesh = point_cloud_like
+            np_points = pcloud_mesh.vertices
 
         if name is None:
             name = 'pointcloudlink_{}'.format(
@@ -290,3 +293,10 @@ class PointCloudLink(Link):
 
         super(PointCloudLink, self).__init__(pos=pos, rot=rot, name=name,
                                              visual_mesh=pcloud_mesh)
+
+        if with_sdf:
+            sdf = PointCloudSDF(np_points, radius)
+            self.assoc(sdf, relative_coords="local")
+            self._sdf = sdf
+        else:
+            self._sdf = None

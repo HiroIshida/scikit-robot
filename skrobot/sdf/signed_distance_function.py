@@ -9,6 +9,7 @@ import tempfile
 import numpy as np
 import pysdfgen
 from scipy.interpolate import RegularGridInterpolator
+from scipy.spatial import KDTree
 
 from skrobot.coordinates import CascadedCoords
 from skrobot.coordinates import Coordinates
@@ -528,6 +529,37 @@ class GridSDF(SignedDistanceFunction):
                              output_filepath=sdf_cache_path)
             logger.info('finish pre-computation')
         return GridSDF.from_file(sdf_cache_path, **kwargs)
+
+
+class PointCloudSDF(SignedDistanceFunction):
+
+    def __init__(self, points, radius, kdtree_option=None, use_abs=False):
+        super(PointCloudSDF, self).__init__(use_abs=use_abs)
+        if not kdtree_option:
+            kdtree_option = {}
+        self._kdtree = KDTree(points, **kdtree_option)
+        self._radius = radius
+        self._points = points
+        self._surface_threshold = radius * 0.5
+
+    def _signed_distance(self, points_sdf):
+        dists, _ = self._kdtree.query(points_sdf)
+        return dists - self._radius
+
+    def _surface_points(self, n_sample=200):
+        n_pts = len(self._points)
+        idxes = np.random.randint(n_pts, size=n_sample)
+        surface_points = self._points[idxes]
+        noise_raw = np.random.randn(n_sample, 3)
+        noise_unit_sphere_surface = noise_raw / np.linalg.norm(noise_raw, axis=1)[:, None]
+        noise = noise_unit_sphere_surface * self._radius
+
+        # noise norm must be same as self._radius test this
+        np.testing.assert_almost_equal(np.linalg.norm(noise, axis=1), self._radius)
+
+
+        surface_points += noise_unit_sphere_surface * self._radius
+        return surface_points, np.zeros(n_sample)
 
 
 def ray_marching(pts_starts, direction_arr, f_sdf, threshold):
